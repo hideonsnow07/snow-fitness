@@ -1,13 +1,29 @@
 #!/usr/bin/env python3
 """把三個獨立頁面（重訓紀錄、飲控計算機、冰箱食譜）組成一個合併版頁面。
 
-用法：python3 build.py            -> 讀 src/*.html，輸出 dist/index.html
+用法：python3 build.py            -> 讀 src/*.html，輸出 build/dist/index.html（不含個人資料）
+      python3 build.py --local    -> 同上，另外把 export/ 的紀錄注入成種子，
+                                     輸出 ../dist/index.local.html（含個人資料，不可提交）
 每個模組放進自己的 Shadow DOM，CSS 與 id 互不影響；
 模組程式碼原封不動，只把 document / window / claude 換成該模組專用的版本。
 """
-import json, re, pathlib
+import json, re, pathlib, sys
 
 ROOT = pathlib.Path(__file__).parent
+PROJECT = ROOT.parent
+EXPORT = PROJECT / "export"
+LOCAL_OUT = PROJECT / "dist" / "index.local.html"
+SEED_SLOT = "/*LOCAL_SEED*/null"
+
+# 匯出檔 -> 資料庫集合（路徑都是 db_rewrite 改寫後的最終路徑）
+SEED_FILES = {
+    "sessions.json": "data/users/me/log/sessions",
+    "days.json": "days",
+    "profile.json": "profile",
+    "foods.json": "foods",
+    "feed.json": "feed",
+    "fridge_book.json": "data/users/me/fridge/book",
+}
 
 MODULES = [
     {"id": "gym",    "src": "src/gym.html",    "label": "訓練", "icon": "dumbbell",
@@ -50,7 +66,21 @@ def scope_css(css):
     return css
 
 
-def build():
+def load_seed():
+    """讀 export/，整理成 {集合: [{id, data}]}。"""
+    seed = {}
+    for name, coll in SEED_FILES.items():
+        docs = json.loads((EXPORT / name).read_text(encoding="utf-8"))["documents"]
+        seed[coll] = [{"id": d["id"], "data": d["data"]} for d in docs]
+    return seed
+
+
+def script_json(value):
+    """轉成可放進 <script> 的 JSON：紀錄內容是資料，不能讓它關掉 script 標籤。"""
+    return json.dumps(value).replace("<", "\\u003c")
+
+
+def build(local=False):
     fonts, mods = [], []
     for m in MODULES:
         html = (ROOT / m["src"]).read_text(encoding="utf-8")
@@ -86,6 +116,16 @@ def build():
     (ROOT / "dist" / "index.html").write_text(out, encoding="utf-8")
     print("dist/index.html", len(out.encode()), "bytes")
 
+    if local:
+        if out.count(SEED_SLOT) != 1:
+            sys.exit("shell.html 的種子插槽應該剛好一個")
+        seed = load_seed()
+        page = out.replace(SEED_SLOT, script_json(seed))
+        LOCAL_OUT.parent.mkdir(exist_ok=True)
+        LOCAL_OUT.write_text(page, encoding="utf-8")
+        counts = ", ".join(f"{c}={len(d)}" for c, d in seed.items())
+        print(LOCAL_OUT, len(page.encode()), "bytes;", counts)
+
 
 if __name__ == "__main__":
-    build()
+    build(local="--local" in sys.argv[1:])

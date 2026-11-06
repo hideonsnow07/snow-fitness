@@ -27,6 +27,7 @@ body{background:var(--shell-bg);color:var(--shell-ink)}
 .ico-meter{--m:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 18a8 8 0 1 1 16 0'/%3E%3Cpath d='M12 18l4-5'/%3E%3C/svg%3E")}
 .ico-fridge{--m:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Crect x='6' y='3' width='12' height='18' rx='2'/%3E%3Cpath d='M6 10h12M9 6v2M9 13v3'/%3E%3C/svg%3E")}
 @media (prefers-reduced-motion:no-preference){.navbtn{transition:color .15s}}
+.localnote{margin:0;padding:6px 16px;text-align:center;font:500 12px "Noto Sans TC",system-ui,sans-serif;color:var(--shell-muted);background:var(--shell-bar);border-bottom:1px solid var(--shell-line)}
 </style>
 
 <!--TEMPLATES-->
@@ -40,11 +41,13 @@ body{background:var(--shell-bg);color:var(--shell-ink)}
 <script>
 (function(){
 var CONFIG=/*CONFIG*/;
+var LOCAL_SEED=/*LOCAL_SEED*/null;
 var MODS={};
 /*MODULES*/
 
 var realDoc=document, realWin=window, KEY='snow-app-tab';
 var ids=Object.keys(CONFIG);
+var LOCAL=LOCAL_SEED?localBackend(LOCAL_SEED):null;
 
 function bindAll(target, overrides){
   /* 代理的目標用空物件：window 上有不可改的屬性，直接代理 window 會讓 claude 被覆寫時丟出錯誤 */
@@ -65,10 +68,107 @@ function wrapDb(db, rules){
   }
   return {doc:function(p){return db.doc(fix(p))},collection:function(p){return db.collection(fix(p))}};
 }
+/* 本機版專用：只有組裝時注入種子（index.local.html）才啟用，一律不碰 window.claude，也就不會寫回 claude.ai。
+   其他組裝的 LOCAL_SEED 是 null，這段不會執行。介面只做模組用到的部分。
+   資料存 localStorage，每份文件一個 key：多開分頁時只覆蓋被改的文件，並用 storage 事件互相更新。
+   種子只匯入一次（以 MARK 為準），之後本機的新增、修改、刪除都不會被蓋掉。 */
+function localBackend(seed){
+  var PRE='snow-local:doc:', MARK='snow-local:seeded';
+  var META={fromCache:false,hasPendingWrites:false};
+  var ls=null, mem=new Map(), subs=[];
+  function key(coll,id){return PRE+coll+'\n'+id}
+  function read(k){return ls?ls.getItem(k):(mem.has(k)?mem.get(k):null)}
+  function importSeed(){
+    Object.keys(seed).forEach(function(coll){
+      seed[coll].forEach(function(d){
+        var k=key(coll,d.id),raw=JSON.stringify(d.data);
+        if(!ls)mem.set(k,raw);else if(ls.getItem(k)===null)ls.setItem(k,raw);
+      });
+    });
+    if(ls)ls.setItem(MARK,new Date().toISOString());
+  }
+  try{
+    ls=realWin.localStorage;
+    if(!ls.getItem(MARK))importSeed();
+  }catch(e){ls=null;importSeed()} /* 瀏覽器不給存：種子仍可讀，寫入會回報失敗，不假裝存好 */
+
+  function changed(coll,id){
+    subs.slice().forEach(function(s){if(s.coll===coll&&(s.id===null||s.id===id))Promise.resolve().then(s.fire)});
+  }
+  function write(coll,id,raw){
+    if(!ls)return Promise.reject({code:'unavailable'});
+    try{if(raw===null)ls.removeItem(key(coll,id));else ls.setItem(key(coll,id),raw)}
+    catch(e){return Promise.reject({code:e&&e.name==='QuotaExceededError'?'quota_exceeded':'unavailable'})}
+    changed(coll,id);
+    return Promise.resolve();
+  }
+  function listen(coll,id,fire){
+    var sub={coll:coll,id:id,fire:fire};
+    subs.push(sub);
+    Promise.resolve().then(fire);
+    return function(){var i=subs.indexOf(sub);if(i>=0)subs.splice(i,1)};
+  }
+  function docSnap(coll,id){
+    var raw=read(key(coll,id));
+    return {id:id,exists:raw!==null,data:function(){return raw===null?undefined:JSON.parse(raw)},metadata:META};
+  }
+  function idsOf(coll){
+    var pre=key(coll,''),out=[],i,k;
+    if(ls){for(i=0;i<ls.length;i++){k=ls.key(i);if(k.indexOf(pre)===0)out.push(k.slice(pre.length))}}
+    else mem.forEach(function(_,k){if(k.indexOf(pre)===0)out.push(k.slice(pre.length))});
+    return out.sort();
+  }
+  function collSnap(coll,field,dir,max){
+    var docs=idsOf(coll).map(function(id){return docSnap(coll,id)});
+    if(field){
+      docs=docs.filter(function(d){return d.data()[field]!==undefined});
+      docs.sort(function(a,b){var x=a.data()[field],y=b.data()[field];return x<y?-1:x>y?1:0});
+      if(dir==='desc')docs.reverse();
+    }
+    if(max!==null)docs=docs.slice(0,max);
+    return {docs:docs,metadata:META};
+  }
+  function query(coll,field,dir,max){
+    return {
+      orderBy:function(f,d){return query(coll,f,d,max)},
+      limit:function(n){return query(coll,field,dir,n)},
+      onSnapshot:function(cb){return listen(coll,null,function(){cb(collSnap(coll,field,dir,max))})}
+    };
+  }
+  function collRef(coll){
+    var q=query(coll,null,null,null);
+    q.doc=function(id){return docRef(coll,id)};
+    return q;
+  }
+  function docRef(coll,id){
+    return {
+      id:id,
+      set:function(data){return write(coll,id,JSON.stringify(data))},
+      delete:function(){return write(coll,id,null)},
+      collection:function(name){return collRef(coll+'/'+id+'/'+name)},
+      onSnapshot:function(cb){return listen(coll,id,function(){cb(docSnap(coll,id))})}
+    };
+  }
+  realWin.addEventListener('storage',function(e){
+    if(!e.key||e.key.indexOf(PRE)!==0)return;
+    var p=e.key.slice(PRE.length).split('\n');
+    changed(p[0],p[1]);
+  });
+  var db={
+    doc:function(path){var i=path.lastIndexOf('/');return docRef(path.slice(0,i),path.slice(i+1))},
+    collection:collRef
+  };
+  var user={id:async function(){return 'me'}};
+  return {
+    writable:!!ls,
+    use:async function(name){return name==='db'?db:name==='user'?user:null}
+  };
+}
+
 function claudeFor(id){
   var rules=CONFIG[id].rewrite||[];
   return {use:async function(name){
-    var c=realWin.claude;
+    var c=LOCAL||realWin.claude;
     if(!c||!c.use)return null;
     var ns=await c.use(name);
     if(name==='db'&&ns&&rules.length)return wrapDb(ns,rules);
@@ -83,6 +183,14 @@ function show(id){
     realDoc.getElementById('nav-'+m).setAttribute('aria-pressed',String(m===id));
   });
   try{localStorage.setItem(KEY,id)}catch(e){}
+}
+
+/* 本機版的同步字樣沿用模組原文（已同步到雲端），這裡說清楚實際存在哪 */
+if(LOCAL){
+  var note=realDoc.createElement('p');
+  note.className='localnote';
+  note.textContent=LOCAL.writable?'本機版：紀錄只存在這個瀏覽器，不會同步到 claude.ai':'本機版：這個瀏覽器無法存檔，新的紀錄不會保留';
+  realDoc.getElementById('app').prepend(note);
 }
 
 /* 主題：把整頁的 data-theme 同步到每個模組 */
