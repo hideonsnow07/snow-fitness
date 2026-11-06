@@ -248,6 +248,7 @@ section.view{padding-top:18px;display:flex;flex-direction:column;gap:22px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .field label,.field .lbl{font-size:13px;color:var(--muted)}
+input,select,textarea{font-size:16px}
 input[type=text],input[type=number],select,textarea{width:100%;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
 textarea{resize:vertical;min-height:64px}
 input[type=range]{width:100%;accent-color:var(--kcal)}
@@ -297,6 +298,8 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6p
   .tab{min-height:44px}
   .check input{width:24px;height:24px}
   .chip{padding:10px 16px}
+  .step,.x{width:44px;height:44px;min-width:44px;min-height:44px}
+  .wd{min-height:44px}
   #prevDay.icon-btn,#nextDay.icon-btn{width:44px;height:44px;min-width:44px;min-height:44px}
 }
 @media (prefers-reduced-motion:reduce){.fill{transition:none}}
@@ -435,7 +438,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6p
     <details class="more">
     <summary>手動新增食物</summary>
     <form class="card" id="customForm" style="margin-top:10px">
-      <div class="small muted">不確定數字的話，用「今日記錄」上方的「問 Claude」比較快。</div>
+      <div class="small muted" id="customFoodHint">可用「手動新增」輸入食物與營養數字。</div>
       <div class="grid2">
         <div class="field"><label for="cName">名稱</label><input type="text" id="cName" required></div>
         <div class="field"><label for="cUnit">一份是</label><input type="text" id="cUnit" value="1份"></div>
@@ -549,6 +552,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6p
 }
 .wrap { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
 button, input, select { font: inherit; color: inherit; }
+input, select, textarea { font-size: 16px; }
 button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 h1 { font-size: 28px; font-weight: 900; margin: 0; line-height: 1.2; }
@@ -652,7 +656,7 @@ ol.steps li::marker { color: var(--accent); font-weight: 700; font-family: var(-
 .form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
 .form label.full { grid-column: 1 / -1; }
-.form input { border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: 7px 9px; font-size: 15px; width: 100%; }
+.form input { border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: 7px 9px; font-size: 16px; width: 100%; }
 .foot { color: var(--muted); font-size: 12px; margin: 0; }
 @media (prefers-reduced-motion: no-preference) { .tab, .chip, .seg { transition: background .15s, color .15s; } }
 
@@ -683,7 +687,7 @@ ol.steps li::marker { color: var(--accent); font-weight: 700; font-family: var(-
 .kv ul { padding-left: 18px; }
 .seas { font-family: var(--font-body) !important; white-space: normal !important; text-align: right; }
 .libbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.libbar select { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 5px 8px; font-size: 13px; }
+.libbar select { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 5px 8px; font-size: 16px; }
 a { color: var(--accent); }
 @media (max-width: 380px) { .scores { grid-template-columns: 1fr; } }
 
@@ -1442,7 +1446,7 @@ function renderLog(){
 
   var ul=$('#entries');ul.replaceChildren();
   $('#itemCount').textContent=day.items.length?day.items.length+' 項':'';
-  if(!day.items.length)ul.append(h('li',{class:'empty',style:'display:block'},'還沒有記錄。點上面的常吃、問 Claude，或到「食物庫」挑。'));
+  if(!day.items.length)ul.append(h('li',{class:'empty',style:'display:block'},S.sample?'還沒有記錄。點上面的常吃、問 Claude，或到「食物庫」挑。':'還沒有記錄。點上面的常吃，或到「食物庫」挑。'));
   day.items.forEach(function(i){
     var step=i.step||0.5;
     ul.append(h('li',null,
@@ -1574,7 +1578,7 @@ function renderFoodList(){
     return S.cat==='全部'||f.cat===S.cat;
   });
   if(!list.length){
-    var msg=q?'沒有符合的食物。回「今日記錄」問 Claude 最快。':
+    var msg=q?(S.sample?'沒有符合的食物。回「今日記錄」問 Claude 最快。':'沒有符合的食物。試試「手動新增」。'):
       S.cat==='常吃'?'按每樣食物旁的 ☆，就會出現在這裡和今日頁。':
       S.cat==='手搖飲'?'用上面的組合器調好一杯，按「存成常喝」就會出現在這裡。':'';
     if(msg)ul.append(h('li',{class:'empty',style:'display:block'},msg));
@@ -1809,7 +1813,9 @@ $('#suppManage').addEventListener('click',function(){S.cat='保健食品';S.q=''
 $('#cOnce').addEventListener('click',function(){var f=readCustom();if(f)addEntry(f,1)});
 
 /* ---------- 啟動 ---------- */
-function renderAll(){renderQuick();renderLog();renderBuilder();renderDrink();renderCats();renderFoodList();fillGoalInputs();renderGoal()}
+function renderAll(){
+  $('#customFoodHint').textContent=S.sample?'不確定數字的話，用「今日記錄」上方的「問 Claude」比較快。':'可用「手動新增」輸入食物與營養數字。';
+  renderQuick();renderLog();renderBuilder();renderDrink();renderCats();renderFoodList();fillGoalInputs();renderGoal()}
 function loadLocal(){
   S.profile=migrate(LS.get('dc:profile'));
   S.foods=LS.get('dc:foods')||[];
@@ -1861,6 +1867,7 @@ renderAll();
   try{var lim=await s.limits();S.canImg=!!(lim&&lim.images)}catch(e){S.canImg=false}
   $('#photoBtn').hidden=!S.canImg;
   $('#aiForm').hidden=false;
+  renderAll();
 })();
 
 (async function init(){
