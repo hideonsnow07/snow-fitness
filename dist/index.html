@@ -1,5 +1,6 @@
 <title>SNOW 健身</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
@@ -7,7 +8,7 @@
 /* Layout: 三個模組疊在同一頁，一次顯示一個；底部固定分頁列切換。 */
 :root{
   --shell-bg:#eef1f2; --shell-bar:#ffffff; --shell-line:#d6dcdf; --shell-ink:#15201f; --shell-muted:#64706f; --shell-on:#0d6b61;
-  --barh:calc(58px + env(safe-area-inset-bottom, 0px));
+  --barh:calc(62px + env(safe-area-inset-bottom, 0px));
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --shell-bg:#0f1514; --shell-bar:#171f1e; --shell-line:#2a3634; --shell-ink:#e6eeec; --shell-muted:#93a29f; --shell-on:#4fc4b4; color-scheme:dark}}
@@ -20,11 +21,11 @@ body{background:var(--shell-bg);color:var(--shell-ink)}
   display:grid;grid-template-columns:repeat(3,1fr);
   padding-bottom:env(safe-area-inset-bottom,0px);
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.navbtn{border:0;background:none;color:var(--shell-muted);height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  font:500 12px "Noto Sans TC",system-ui,sans-serif;cursor:pointer}
+.navbtn{border:0;background:none;color:var(--shell-muted);height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font:500 13px "Noto Sans TC",system-ui,sans-serif;cursor:pointer}
 .navbtn[aria-pressed="true"]{color:var(--shell-on);font-weight:700}
 .navbtn:focus-visible{outline:2px solid var(--shell-on);outline-offset:-4px;border-radius:8px}
-.ico{width:24px;height:24px;background:currentColor;-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
+.ico{width:26px;height:26px;background:currentColor;-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
 .ico-dumbbell{--m:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 7v10M3 9v6M18 7v10M21 9v6M6 12h12'/%3E%3C/svg%3E")}
 .ico-meter{--m:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 18a8 8 0 1 1 16 0'/%3E%3Cpath d='M12 18l4-5'/%3E%3C/svg%3E")}
 .ico-fridge{--m:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Crect x='6' y='3' width='12' height='18' rx='2'/%3E%3Cpath d='M6 10h12M9 6v2M9 13v3'/%3E%3C/svg%3E")}
@@ -289,6 +290,15 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6p
 .note-box{font-size:13px;color:var(--muted)}
 
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--btn);color:var(--btn-ink);padding:8px 16px;border-radius:99px;font-size:14px;z-index:20;max-width:90vw}
+#backupImport .btn,#backupFile{min-height:44px}
+#backupFile{max-width:100%;padding:8px 0}
+#backupFile::file-selector-button{min-height:44px;padding:8px 14px;margin-right:8px}
+@media (max-width:640px){
+  .tab{min-height:44px}
+  .check input{width:24px;height:24px}
+  .chip{padding:10px 16px}
+  #prevDay.icon-btn,#nextDay.icon-btn{width:44px;height:44px;min-width:44px;min-height:44px}
+}
 @media (prefers-reduced-motion:reduce){.fill{transition:none}}
 
 #toast{bottom:calc(16px + var(--barh,0px))!important}</style><div class="mbody"><div class="wrap">
@@ -478,6 +488,20 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6p
       </div>
       <div class="field"><label for="gBmr">基礎代謝（選填，有體組成儀報告就填這裡）</label>
         <input type="number" id="gBmr" min="800" max="4000" inputmode="numeric" placeholder="留空則用公式估算"></div>
+    </div>
+    <div class="card" id="backupImport" hidden>
+      <h2 style="font-size:18px">匯入備份</h2>
+      <p class="note-box">只寫入這支手機，不會上傳。匯入會更新個人目標，並覆蓋備份內相同日期的飲食紀錄；其他日期會保留。請選擇 JSON 備份檔，或貼上備份 JSON。</p>
+      <div class="field">
+        <label for="backupFile">選擇 JSON 備份檔</label>
+        <input type="file" id="backupFile" accept=".json,application/json">
+      </div>
+      <button class="btn" type="button" id="importFile">匯入選取的 JSON 備份檔</button>
+      <div class="field">
+        <label for="backupText">貼上備份 JSON</label>
+        <textarea id="backupText" rows="6" placeholder="在這裡貼上備份 JSON" spellcheck="false"></textarea>
+      </div>
+      <button class="btn" type="button" id="importText">匯入貼上的 JSON 備份</button>
     </div>
   </section>
 </div>
@@ -1794,6 +1818,38 @@ function loadLocal(){
       if(k&&k.indexOf('dc:day:')===0){var v=LS.get(k);if(v)S.days[k.slice(7)]=v}}
   }catch(e){}
 }
+// Import is available only after initialization confirms local-only storage.
+function importBackup(text){
+  if(S.db)return;
+  if($('#backupImport').hidden)return;
+  var backup,profile,days;
+  try{
+    backup=JSON.parse(text);
+    if(!backup||typeof backup!=='object'||
+      (backup.kind!==undefined&&backup.kind!=='snow-fitness-import')||
+      !backup.profile||typeof backup.profile!=='object'||Array.isArray(backup.profile)||
+      !Array.isArray(backup.days))throw new Error('shape');
+    days=backup.days.map(function(entry){
+      if(!entry||!entry.data||typeof entry.data!=='object'||Array.isArray(entry.data))throw new Error('day');
+      var date=entry.id||entry.data.date;
+      if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error('date');
+      return {date:date,data:entry.data};
+    });
+    profile=migrate(clone(backup.profile));
+  }catch(e){toast('備份格式錯誤：請提供有效的 JSON，包含 profile 與 days 日期紀錄');return}
+  if(S.db)return;
+  LS.set('dc:profile',profile);
+  days.forEach(function(entry){LS.set('dc:day:'+entry.date,entry.data)});
+  loadLocal();renderAll();
+  toast('備份已匯入這支手機，不會上傳');
+}
+$('#importText').addEventListener('click',function(){importBackup($('#backupText').value)});
+$('#importFile').addEventListener('click',async function(){
+  if(S.db)return;
+  var file=$('#backupFile').files[0];
+  if(!file){toast('請先選擇 JSON 備份檔');return}
+  try{importBackup(await file.text())}catch(e){toast('無法讀取備份檔，請重新選擇或貼上 JSON')}
+});
 showTab(location.hash.slice(1));
 renderAll();
 
@@ -1810,8 +1866,8 @@ renderAll();
 (async function init(){
   var db=null;
   try{db=window.claude&&window.claude.use?await window.claude.use('db'):null}catch(e){db=null}
-  if(!db){loadLocal();setSync('local');renderAll();return}
-  S.db=db;setSync('wait');
+  if(!db){loadLocal();setSync('local');renderAll();$('#backupImport').hidden=false;return}
+  S.db=db;$('#backupImport').hidden=true;setSync('wait');
   var slow=setTimeout(function(){setSync('slow')},10000);
   var firstDone=false;
   function confirmed(snap){

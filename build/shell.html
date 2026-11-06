@@ -1,11 +1,12 @@
 <title>SNOW 健身</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <!--FONTS-->
 <style>
 /* Layout: 三個模組疊在同一頁，一次顯示一個；底部固定分頁列切換。 */
 :root{
   --shell-bg:#eef1f2; --shell-bar:#ffffff; --shell-line:#d6dcdf; --shell-ink:#15201f; --shell-muted:#64706f; --shell-on:#0d6b61;
-  --barh:calc(58px + env(safe-area-inset-bottom, 0px));
+  --barh:calc(62px + env(safe-area-inset-bottom, 0px));
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --shell-bg:#0f1514; --shell-bar:#171f1e; --shell-line:#2a3634; --shell-ink:#e6eeec; --shell-muted:#93a29f; --shell-on:#4fc4b4; color-scheme:dark}}
@@ -18,11 +19,11 @@ body{background:var(--shell-bg);color:var(--shell-ink)}
   display:grid;grid-template-columns:repeat(3,1fr);
   padding-bottom:env(safe-area-inset-bottom,0px);
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.navbtn{border:0;background:none;color:var(--shell-muted);height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  font:500 12px "Noto Sans TC",system-ui,sans-serif;cursor:pointer}
+.navbtn{border:0;background:none;color:var(--shell-muted);height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font:500 13px "Noto Sans TC",system-ui,sans-serif;cursor:pointer}
 .navbtn[aria-pressed="true"]{color:var(--shell-on);font-weight:700}
 .navbtn:focus-visible{outline:2px solid var(--shell-on);outline-offset:-4px;border-radius:8px}
-.ico{width:24px;height:24px;background:currentColor;-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
+.ico{width:26px;height:26px;background:currentColor;-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
 .ico-dumbbell{--m:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 7v10M3 9v6M18 7v10M21 9v6M6 12h12'/%3E%3C/svg%3E")}
 .ico-meter{--m:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 18a8 8 0 1 1 16 0'/%3E%3Cpath d='M12 18l4-5'/%3E%3C/svg%3E")}
 .ico-fridge{--m:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Crect x='6' y='3' width='12' height='18' rx='2'/%3E%3Cpath d='M6 10h12M9 6v2M9 13v3'/%3E%3C/svg%3E")}
