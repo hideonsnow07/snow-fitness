@@ -277,6 +277,11 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6p
 .aires li{grid-template-columns:auto minmax(0,1fr) auto}
 .aires input[type=checkbox]{width:18px;height:18px;accent-color:var(--ai)}
 .aires .qin{width:58px;text-align:center;padding:4px 6px}
+.pages-photos .file-btn{min-height:44px;min-width:120px;display:inline-flex;align-items:center;justify-content:center}
+#aiPhotoPreview{display:block;max-width:100%;width:160px;max-height:160px;object-fit:contain;border-radius:8px}
+.ai-edit{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.ai-edit label{display:flex;align-items:center;gap:4px;font-size:13px}
+.aires .ai-edit .qin{min-height:44px;width:70px}
 .photo-name{font-size:13px;color:var(--muted)}
 .file-btn{position:relative;overflow:hidden}
 .file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
@@ -291,6 +296,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6p
 .note-box{font-size:13px;color:var(--muted)}
 
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--btn);color:var(--btn-ink);padding:8px 16px;border-radius:99px;font-size:14px;z-index:20;max-width:90vw}
+#aiPagesActions .btn,#aiPasteBlock .btn{min-height:44px}
 #backupImport .btn,#backupFile{min-height:44px}
 #backupFile{max-width:100%;padding:8px 0}
 #backupFile::file-selector-button{min-height:44px;padding:8px 14px;margin-right:8px}
@@ -348,8 +354,8 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6p
     <!-- AI 查詢 -->
     <form class="card aibox" id="aiForm" hidden>
       <div>
-        <h2 style="font-size:16px">問 Claude：吃了什麼？</h2>
-        <div class="small muted">直接打字，可以一次寫很多樣，例如「50嵐 四季春 大杯 微糖 加珍珠、一份滷肉飯」。拍營養標示也可以，數字會照標示算。</div>
+        <h2 id="aiTitle" style="font-size:16px">問 Claude：吃了什麼？</h2>
+        <div class="small muted" id="aiHelp">直接打字，可以一次寫很多樣，例如「50嵐 四季春 大杯 微糖 加珍珠、一份滷肉飯」。拍營養標示也可以，數字會照標示算。</div>
       </div>
       <textarea id="aiText" rows="2" placeholder="例如：鼎泰豐 排骨蛋炒飯、可不可 熟成紅茶 大杯 無糖"></textarea>
       <div class="btnrow">
@@ -358,6 +364,27 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6p
         <span class="photo-name" id="photoName"></span>
         <button class="btn ghost sm" type="button" id="aiStop" hidden>停止</button>
       </div>
+      <div id="aiPagesPhotos" hidden>
+        <div class="btnrow pages-photos">
+          <label class="btn ghost file-btn">拍照<input type="file" id="aiCamera" accept="image/*" capture="environment" aria-label="拍照"></label>
+          <label class="btn ghost file-btn">相簿／熱量標示<input type="file" id="aiAlbum" accept="image/*" aria-label="相簿／熱量標示"></label>
+        </div>
+        <div id="aiPhotoView" hidden>
+          <img id="aiPhotoPreview" alt="已選擇的食物或熱量標示照片">
+          <button class="btn ghost" type="button" id="aiPhotoClear">清除照片</button>
+        </div>
+      </div>
+      <div class="aistatus" id="aiOffline" role="status" hidden></div>
+      <div id="aiPagesActions" hidden>
+        <div class="btnrow">
+          <button class="btn" type="button" id="aiCopy">複製提問</button>
+          <button class="btn ghost" type="button" id="aiShare">分享提問</button>
+        </div>
+      </div>
+      <div id="aiPasteBlock" hidden>
+        <textarea id="aiPaste" rows="4" aria-label="估熱量結果 JSON" placeholder='貼上 {"items":[…]}'></textarea>
+        <button class="btn" type="button" id="aiPasteGo">貼上估熱量結果</button>
+      </div>
       <div class="aistatus" id="aiStatus" role="status"></div>
       <div id="aiOut" hidden>
         <ul class="rows aires" id="aiList"></ul>
@@ -365,7 +392,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6p
           <button class="btn" type="button" id="aiAdd">把勾選的加入這一天</button>
           <button class="btn ghost" type="button" id="aiSave">勾選的也存進食物庫</button>
         </div>
-        <div class="note-box" style="margin-top:8px">Claude 沒有上網，數字是依常見份量估的，連鎖店品項請對照官方。同一品項不同部位或尺寸會分開列出。有營養標示時以標示為準。</div>
+        <div class="note-box" id="aiDisclaimer" style="margin-top:8px">Claude 沒有上網，數字是依常見份量估的，連鎖店品項請對照官方。同一品項不同部位或尺寸會分開列出。有營養標示時以標示為準。</div>
       </div>
     </form>
 
@@ -1582,6 +1609,9 @@ function renderFoodList(){
       S.cat==='常吃'?'按每樣食物旁的 ☆，就會出現在這裡和今日頁。':
       S.cat==='手搖飲'?'用上面的組合器調好一杯，按「存成常喝」就會出現在這裡。':'';
     if(msg)ul.append(h('li',{class:'empty',style:'display:block'},msg));
+    if(q&&!S.sample)ul.append(h('li',null,h('button',{class:'btn',type:'button',onclick:function(){
+      $('#aiText').value=S.q.trim();go('log');$('#aiText').focus();
+    }},'用這段文字去估')));
   }
   list.forEach(function(f){
     var pin=isPinned(f.id),n=f.defQty||1;
@@ -1643,7 +1673,7 @@ function readGoal(){
 }
 
 /* ---------- 問 Claude ---------- */
-var aiCtl=null,aiItems=[],aiPhoto=null;
+var aiCtl=null,aiItems=[],aiPhoto=null,aiPhotoUrl=null;
 function presetText(){
   return allFoods().map(function(f){return f.name+'｜'+f.unit+'｜'+fmt(f.kcal)+'大卡｜'+fmt(f.p)+'g'}).join('\n');
 }
@@ -1670,6 +1700,64 @@ function aiPrompt(text,hasImg){
     text||'（只有照片）'
   ].join('\n');
 }
+// Pages uses a human conversation; the photo stays in memory until explicitly shared.
+function pagesQuestion(){
+  return '總指揮，請幫我估算這餐的熱量與蛋白質，讓我預覽後手動入帳。\n'+
+    (aiPhoto?'我已附照片，請查看分享的圖片；複製的文字不包含照片，若沒收到圖片我會另傳。\n':'')+
+    aiPrompt($('#aiText').value.trim(),!!aiPhoto);
+}
+async function copyQuestion(){
+  var text=pagesQuestion();
+  try{
+    try{
+      if(!navigator.clipboard||!navigator.clipboard.writeText)throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(text);
+    }catch(e){
+      var field=document.createElement('textarea');
+      field.value=text;field.setAttribute('readonly','');
+      field.style.cssText='position:fixed;left:0;top:0;opacity:0';
+      $('#aiForm').appendChild(field);
+      var focused=document.activeElement;
+      try{field.focus();field.select();if(!document.execCommand('copy'))throw new Error('copy failed')}
+      finally{field.remove();if(focused&&focused.focus)focused.focus()}
+    }
+    toast('已複製提問'+(aiPhoto?'，照片請另外傳到對話':''));
+  }catch(e){toast('無法複製提問，請再試一次')}
+}
+async function shareQuestion(){
+  if(!navigator.share){toast('這個瀏覽器無法分享，請用「複製提問」');return}
+  var data={title:'拍照或詢問食物熱量',text:pagesQuestion()},hasFile=false;
+  if(aiPhoto&&navigator.canShare){
+    try{hasFile=navigator.canShare({files:[aiPhoto]})}catch(e){}
+  }
+  if(hasFile)data.files=[aiPhoto];
+  try{
+    await navigator.share(data);
+    if(aiPhoto&&!hasFile)toast('已分享提問，照片請另外傳到對話');
+  }catch(e){if(!e||e.name!=='AbortError')toast('無法分享，請用「複製提問」')}
+}
+function pasteEstimate(){
+  var items;
+  try{
+    var result=JSON.parse($('#aiPaste').value);
+    items=Array.isArray(result)?result:result&&result.items;
+    if(!Array.isArray(items)||items.some(function(x){return !x||typeof x!=='object'||Array.isArray(x)||typeof x.name!=='string'||!x.name.trim()}))throw new Error('invalid items');
+  }catch(e){toast('請貼上包含 items 的估熱量 JSON');return}
+  aiItems=items.map(function(x){return {
+    name:String(x.name||'未命名').slice(0,60),unit:String(x.unit||'1份').slice(0,20),
+    qty:Math.max(0.1,num(x.qty,1)),kcal:Math.max(0,num(x.kcal,0)),p:Math.max(0,num(x.protein,0)),
+    conf:CONF[x.confidence]?x.confidence:'medium',note:String(x.note||'').slice(0,60),
+    group:x.group?String(x.group).slice(0,30):'',
+    kmin:num(x.kcal_min,null),kmax:num(x.kcal_max,null),
+    pick:x['default']!==false}});
+  $('#aiOut').hidden=true;
+  if(!aiItems.length){$('#aiStatus').textContent='看不出是什麼食物，換個說法再試試。';return}
+  $('#aiStatus').textContent='';
+  renderAi();
+}
+$('#aiCopy').addEventListener('click',copyQuestion);
+$('#aiShare').addEventListener('click',shareQuestion);
+$('#aiPasteGo').addEventListener('click',pasteEstimate);
 var CONF={label:'照標示',known:'已知',high:'較準',medium:'估計',low:'不太確定'};
 function setAiBusy(b){
   $('#aiGo').disabled=b;$('#aiStop').hidden=!b;
@@ -1713,6 +1801,11 @@ function renderAi(){
   aiItems.forEach(function(it,idx){
     var cb=h('input',{type:'checkbox','aria-label':'選取 '+it.name,onchange:function(e){it.pick=e.target.checked;sumAi()}});cb.checked=it.pick;
     var q=h('input',{type:'number',class:'qin',min:'0.1',step:'0.5',value:String(it.qty),inputmode:'decimal','aria-label':it.name+' 份數',oninput:function(e){it.qty=Math.max(0,num(e.target.value,0));sumAi();line()}});
+    function editNutrition(key,label){
+      return h('label',null,label,h('input',{type:'number',class:'qin',min:'0',step:'0.1',value:String(it[key]),inputmode:'decimal','aria-label':it.name+' 每份'+label,oninput:function(e){
+        it[key]=Math.max(0,num(e.target.value,0));sumAi();line();
+      }}));
+    }
     var tot=h('div',{class:'vals'});
     function line(){tot.replaceChildren(
       h('span',{class:'num v-k'},String(Math.round(it.kcal*it.qty)),h('span',{class:'v-u',text:'大卡'})),
@@ -1721,8 +1814,8 @@ function renderAi(){
     ul.append(h('li',null,cb,
       h('div',null,
         h('div',{class:'nm'},h('span',{class:'badge '+(it.conf==='label'||it.conf==='known'?'label':it.conf==='low'?'est':'ai'),text:CONF[it.conf]}),it.name),
-        h('div',{class:'meta',text:'每'+it.unit+' '+fmt(it.kcal)+' 大卡'+(it.kmin!=null&&it.kmax!=null&&it.kmax>it.kmin?'（約 '+Math.round(it.kmin)+'–'+Math.round(it.kmax)+'）':'')+' · '+fmt(it.p)+'g'+(it.group&&!it.pick?' · 其他選項，要吃再勾':'')+(it.note?' · '+it.note:'')}),
-        h('div',{class:'ctrl',style:'margin-top:4px'},h('span',{class:'small muted',text:'份數'}),q)),
+        h('div',{class:'meta',text:'每'+it.unit+(it.kmin!=null&&it.kmax!=null&&it.kmax>it.kmin?'（約 '+Math.round(it.kmin)+'–'+Math.round(it.kmax)+'）':'')+(it.group&&!it.pick?' · 其他選項，要吃再勾':'')+(it.note?' · '+it.note:'')}),
+        h('div',{class:'ai-edit'},h('label',null,'份數',q),editNutrition('kcal','熱量（大卡）'),editNutrition('p','蛋白質（g）'))),
       tot));
   });
   $('#aiOut').hidden=false;sumAi();
@@ -1750,11 +1843,33 @@ $('#aiSave').addEventListener('click',function(){
 });
 $('#aiForm').addEventListener('submit',function(e){e.preventDefault();runAi()});
 $('#aiStop').addEventListener('click',function(){if(aiCtl)aiCtl.abort()});
-function clearPhoto(){aiPhoto=null;$('#aiPhoto').value='';$('#photoName').textContent=''}
-$('#aiPhoto').addEventListener('change',function(e){
+function updateOffline(){
+  var offline=!S.sample&&navigator.onLine===false;
+  $('#aiOffline').hidden=!offline;
+  $('#aiOffline').textContent=offline?'估熱量需要網路，現在沒有網路，不能假裝能查；可先用常吃、食物庫或手動新增。':'';
+}
+window.addEventListener('online',updateOffline);
+window.addEventListener('offline',updateOffline);
+function clearPhoto(){
+  aiPhoto=null;
+  if(aiPhotoUrl){URL.revokeObjectURL(aiPhotoUrl);aiPhotoUrl=null}
+  ['#aiPhoto','#aiCamera','#aiAlbum'].forEach(function(id){$(id).value=''});
+  $('#photoName').textContent='';
+  $('#aiPhotoPreview').removeAttribute('src');$('#aiPhotoView').hidden=true;
+}
+function selectPhoto(e){
   var f=e.target.files&&e.target.files[0];
-  aiPhoto=f||null;$('#photoName').textContent=f?'已附：'+f.name:'';
-});
+  if(!f)return;
+  clearPhoto();aiPhoto=f;
+  $('#photoName').textContent='已附：'+f.name;
+  if(!S.sample){
+    aiPhotoUrl=URL.createObjectURL(f);$('#aiPhotoPreview').src=aiPhotoUrl;$('#aiPhotoView').hidden=false;
+  }
+}
+['#aiPhoto','#aiCamera','#aiAlbum'].forEach(function(id){$(id).addEventListener('change',selectPhoto)});
+$('#aiPhotoClear').addEventListener('click',clearPhoto);
+window.addEventListener('pagehide',function(){if(aiPhotoUrl){URL.revokeObjectURL(aiPhotoUrl);aiPhotoUrl=null}});
+window.addEventListener('pageshow',function(){if(aiPhoto&&!S.sample&&!aiPhotoUrl){aiPhotoUrl=URL.createObjectURL(aiPhoto);$('#aiPhotoPreview').src=aiPhotoUrl}});
 
 /* ---------- 分頁 ---------- */
 var TABS=['log','foods','goal'];
@@ -1862,7 +1977,18 @@ renderAll();
 (async function initAi(){
   var s=null;
   try{s=window.claude&&window.claude.use?await window.claude.use('sample'):null}catch(e){s=null}
-  if(!s)return;
+  if(!s){
+    $('#aiForm').hidden=false;
+    $('#aiGo').hidden=true;
+    $('#aiPagesPhotos').hidden=false;
+    $('#aiPagesActions').hidden=false;
+    $('#aiPasteBlock').hidden=false;
+    $('#aiTitle').textContent='拍照或詢問食物熱量';
+    $('#aiHelp').textContent='打字描述吃了什麼，可補「便當少飯」這類說明；用下面兩顆按鈕拍照或選相簿／熱量標示。照片只留在這支手機，不會自動上傳，也不會存進備份；按分享時才會交給你選擇的對話。複製或分享提問到總指揮對話，把回覆的 JSON 貼回後先預覽，再按「把勾選的加入這一天」。沒有網路時無法估熱量，請改用常吃／食物庫／手動新增。';
+    $('#aiDisclaimer').textContent='數字是估計值，連鎖店品項請對照官方。有營養標示時以標示為準。';
+    updateOffline();renderAll();
+    return;
+  }
   S.sample=s;
   try{var lim=await s.limits();S.canImg=!!(lim&&lim.images)}catch(e){S.canImg=false}
   $('#photoBtn').hidden=!S.canImg;
