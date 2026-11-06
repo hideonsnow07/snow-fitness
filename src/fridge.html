@@ -1,0 +1,1521 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Snow的冰箱</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+/* Layout: fridge app. Three tabs; fridge = one shelf at a time + tray + recipe; sticky summary bar at the bottom; recipe detail opens as a full sheet. */
+:root {
+  --bg: #ecf2f0;
+  --surface: #ffffff;
+  --surface-2: #f2f6f5;
+  --ink: #12201d;
+  --muted: #5a6d68;
+  --line: #d5e1dd;
+  --accent: #0c7a69;
+  --accent-ink: #ffffff;
+  --kcal: #c4571a;
+  --prot: #0c7a69;
+  --fat: #b8860b;
+  --carb: #3a67b0;
+  --star: #e0a21b;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-num: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1614; --surface: #15211e; --surface-2: #1c2a27; --ink: #e5f0ed; --muted: #95aca6;
+    --line: #2a3d38; --accent: #4cc8b2; --accent-ink: #062520; --kcal: #f08a4b; --prot: #4cc8b2;
+    --fat: #e2b23a; --carb: #7ea6e8; --star: #f2b93b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1614; --surface: #15211e; --surface-2: #1c2a27; --ink: #e5f0ed; --muted: #95aca6;
+  --line: #2a3d38; --accent: #4cc8b2; --accent-ink: #062520; --kcal: #f08a4b; --prot: #4cc8b2;
+  --fat: #e2b23a; --carb: #7ea6e8; --star: #f2b93b; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-block: 18px 110px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1 { font-size: 28px; font-weight: 900; margin: 0; line-height: 1.2; }
+h2 { font-size: 17px; font-weight: 700; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 4px; gap: 4px; }
+.tab { border: 0; background: transparent; padding: 9px 4px; border-radius: 9px; font-weight: 500; color: var(--muted); }
+.tab[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.panel { display: flex; flex-direction: column; gap: 14px; }
+
+.scroller { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.scroller::-webkit-scrollbar { display: none; }
+.seg { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 13px; font-size: 14px; color: var(--muted); white-space: nowrap; }
+.seg[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); font-weight: 700; }
+.seg .n { font-family: var(--font-num); font-size: 12px; margin-left: 3px; color: var(--accent); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip { border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.chip.add { border-style: dashed; background: transparent; color: var(--muted); }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.row > * { min-width: 0; }
+.ghost { border: 1px solid var(--line); background: transparent; border-radius: 8px; padding: 5px 10px; font-size: 13px; color: var(--muted); }
+.primary { border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 700; border-radius: 10px; padding: 10px 14px; }
+.empty { color: var(--muted); font-size: 14px; margin: 0; }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+
+.item { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.item:first-child { border-top: 0; padding-top: 0; }
+.item b { font-weight: 500; }
+.item small { color: var(--muted); display: block; font-size: 12px; }
+.step { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.step button { border: 0; background: var(--surface-2); width: 34px; height: 34px; font-size: 18px; line-height: 1; }
+.step span { min-width: 76px; text-align: center; font-size: 12.5px; padding: 0 2px; }
+.x { border: 0; background: transparent; color: var(--muted); font-size: 18px; width: 30px; height: 34px; }
+
+.kcal { display: flex; align-items: baseline; gap: 6px; }
+.kcal strong { font-size: 40px; line-height: 1; color: var(--kcal); font-weight: 500; }
+.kcal span { color: var(--muted); font-size: 13px; }
+.bar { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--surface-2); }
+.bar i { display: block; height: 100%; }
+.macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.macro { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.macro label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.macro label i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.macro strong { font-size: 20px; font-weight: 500; display: block; }
+.macro small { color: var(--muted); font-size: 11px; }
+
+.rname { font-size: 21px; font-weight: 900; line-height: 1.3; margin: 0; text-wrap: balance; }
+ol.steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+ol.steps li::marker { color: var(--accent); font-weight: 700; font-family: var(--font-num); }
+.notes { margin: 0; padding: 10px 12px; background: var(--surface-2); border-radius: 10px; font-size: 14px; }
+.stars { display: inline-flex; gap: 2px; }
+.stars button { border: 0; background: transparent; font-size: 28px; line-height: 1; padding: 2px; color: var(--line); }
+.stars button.on { color: var(--star); }
+.stars.sm { pointer-events: none; }
+.stars.sm button { font-size: 15px; padding: 0; }
+.status { font-size: 12px; color: var(--muted); min-height: 18px; }
+.sec-h { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .04em; margin: 0; }
+
+.rlist { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.rrow { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; text-align: left; border: 0; border-top: 1px solid var(--line); background: transparent; padding: 12px 14px; width: 100%; }
+.rrow:first-child { border-top: 0; }
+.rrow:hover { background: var(--surface-2); }
+.rrow .t { font-weight: 700; font-size: 15.5px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rrow .m { font-size: 12.5px; color: var(--muted); }
+.rrow .k { text-align: right; grid-row: span 2; }
+.rrow .k b { display: block; font-family: var(--font-num); font-weight: 500; color: var(--kcal); font-size: 17px; }
+.rrow .k small { font-family: var(--font-num); color: var(--muted); font-size: 12px; }
+.tag { font-size: 11px; font-weight: 700; border-radius: 6px; padding: 0 6px; background: var(--surface-2); color: var(--accent); border: 1px solid var(--line); }
+.tag.hot { background: var(--kcal); color: var(--surface); border-color: var(--kcal); }
+
+.ing { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ing li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px dashed var(--line); font-size: 14.5px; }
+.ing li:first-child { border-top: 0; }
+.ing li span:first-child { flex: none; }
+.ing li span:last-child { font-family: var(--font-num); color: var(--muted); font-size: 13px; white-space: nowrap; }
+.toggle { display: inline-grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: 10px; padding: 3px; }
+.toggle button { border: 0; background: transparent; border-radius: 8px; padding: 6px 14px; font-size: 14px; color: var(--muted); }
+.toggle button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.sheet { position: fixed; inset: 0; z-index: 30; background: var(--bg); overflow-y: auto;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.sheet-in { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.sheet-top { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 12px 0 8px; display: flex; align-items: center; justify-content: space-between; }
+.back { border: 0; background: transparent; font-size: 16px; font-weight: 500; color: var(--accent); padding: 4px 0; }
+
+.dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line);
+  padding-top: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.dock-in { max-width: 560px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dock-in div { font-size: 13px; color: var(--muted); line-height: 1.35; min-width: 0; }
+.dock-in div b { font-family: var(--font-num); font-weight: 500; color: var(--ink); font-size: 15px; }
+
+.form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.form label.full { grid-column: 1 / -1; }
+.form input { border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: 7px 9px; font-size: 15px; width: 100%; }
+.foot { color: var(--muted); font-size: 12px; margin: 0; }
+@media (prefers-reduced-motion: no-preference) { .tab, .chip, .seg { transition: background .15s, color .15s; } }
+
+.pairs { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.pair { text-align: left; border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pair b { font-weight: 700; font-size: 14px; color: var(--accent); }
+.pair small { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.pair:hover { border-color: var(--accent); }
+.iname { border: 0; background: transparent; text-align: left; padding: 0; min-width: 0; }
+.iname b { font-weight: 500; display: block; }
+.iname small { color: var(--muted); display: block; font-size: 12px; }
+.item.focus .iname b { color: var(--accent); font-weight: 700; }
+.scores { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.meter { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; font-size: 13px; }
+.meter .ml { color: var(--muted); }
+.meter .mt { height: 8px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+.meter .mt i { display: block; height: 100%; border-radius: 5px; }
+.meter.h .mt i { background: var(--prot); }
+.meter.t .mt i { background: var(--kcal); }
+.meter b { font-weight: 500; font-size: 15px; min-width: 26px; text-align: right; }
+.rrow .m b { font-weight: 500; color: var(--ink); }
+.times { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.times b { color: var(--ink); font-weight: 500; }
+.kv { display: flex; flex-direction: column; gap: 3px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.kv:first-of-type { border-top: 0; padding-top: 0; }
+.kv b { font-size: 13px; color: var(--muted); }
+.kv p, .kv ul { margin: 0; font-size: 14.5px; }
+.kv ul { padding-left: 18px; }
+.seas { font-family: var(--font-body) !important; white-space: normal !important; text-align: right; }
+.libbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.libbar select { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 5px 8px; font-size: 13px; }
+a { color: var(--accent); }
+@media (max-width: 380px) { .scores { grid-template-columns: 1fr; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Snow的冰箱</h1>
+    <p class="sub">選食材，看搭配、食譜和營養</p>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" id="t-fridge" aria-selected="true" data-tab="fridge">冰箱</button>
+    <button class="tab" role="tab" id="t-lib" aria-selected="false" data-tab="lib">食譜</button>
+    <button class="tab" role="tab" id="t-fav" aria-selected="false" data-tab="fav">收藏 <span id="favCount" class="num"></span></button>
+  </nav>
+
+  <section class="panel" id="p-fridge">
+    <div class="scroller" id="catNav" role="group" aria-label="食材分類"></div>
+    <div class="card" id="shelf"></div>
+    <div class="card" id="pairs" hidden></div>
+    <div class="card">
+      <div class="row"><h2>已選食材</h2><button class="ghost" id="clear" type="button">清空</button></div>
+      <div id="tray"></div>
+    </div>
+    <div class="card" id="result"></div>
+    <div id="matches" style="display:flex;flex-direction:column;gap:8px"></div>
+  </section>
+
+  <section class="panel" id="p-lib" hidden>
+    <div class="scroller" id="methodNav" role="group" aria-label="料理方式"></div>
+    <div class="libbar"><span class="hint" id="libCount"></span>
+      <label class="hint">排序 <select id="libSort">
+        <option value="default">預設</option><option value="health">最健康</option><option value="taste">最好吃</option><option value="protein">蛋白質最高</option><option value="kcal">熱量最低</option>
+      </select></label></div>
+    <div class="rlist" id="libList"></div>
+  </section>
+
+  <section class="panel" id="p-fav" hidden>
+    <div id="favList" style="display:flex;flex-direction:column;gap:8px"></div>
+  </section>
+
+  <p class="foot">營養依每 100g 常見參考值換算，外食與補給品為估算，實際以包裝標示為準。「好吃」分數是 Claude 的主觀評估，「健康」分數依蛋白質比例、蔬菜量、脂肪比例和澱粉種類計算。</p>
+</div>
+
+<div class="dock" id="dock" hidden>
+  <div class="dock-in">
+    <div id="dockText"></div>
+    <button class="primary" id="dockGo" type="button">看食譜</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-in">
+    <div class="sheet-top"><button class="back" id="sheetBack" type="button">‹ 返回</button></div>
+    <div id="sheetBody" style="display:flex;flex-direction:column;gap:14px"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // =====================================================================
+  // Food database. Values per 100g (or per 100ml for drinks).
+  // pu: values are per unit. u/un: grams per countable unit.
+  // ready: eat as-is. raw: fine raw. pre: one-time prep. af: air-fryer minutes at 200°C.
+  // pan: pan instructions. steam: rice-cooker outer-pot cups. boil: minutes. refined: refined starch.
+  // =====================================================================
+  var CATS = [
+    { id: 'mine', n: '常吃' },
+    { id: 'protein', n: '肉類' },
+    { id: 'sea', n: '海鮮' },
+    { id: 'egg', n: '蛋與豆製品' },
+    { id: 'starch', n: '澱粉' },
+    { id: 'veg', n: '蔬菜' },
+    { id: 'mush', n: '菇類與其他' },
+    { id: 'fruit', n: '水果' },
+    { id: 'dairy', n: '乳品與補給' },
+    { id: 'fat', n: '好油脂' }
+  ];
+  var MINE = ['subway', 'whey', 'sweetpotato', 'corn', 'quinoa', 'boiledegg', 'egg', 'chicken', 'shrimp', 'salmon', 'edamame', 'broccoli', 'banana'];
+
+  var F = [
+    { id: 'subway', n: 'Subway 雞肉捲（雙倍肉加蛋）', s: 'Subway 雞肉捲', cat: 'x', pu: 1, un: '份', g: 1, k: 600, p: 50, f: 19, c: 55, ready: 1 },
+    { id: 'whey', n: 'BodyGoals 乳清', s: '乳清', cat: 'dairy', pu: 1, un: '匙', g: 1, k: 120, p: 24, f: 1.5, c: 3, ready: 1 },
+
+    // 肉類（生重）
+    { id: 'chicken', n: '雞胸肉', s: '雞胸', cat: 'protein', grp: 'chicken', g: 150, k: 115, p: 23, f: 2, c: 0, af: 14, pan: '中火每面煎 4 分鐘，蓋鍋燜 3 分鐘', steam: 1, boil: 12 },
+    { id: 'chickentender', n: '雞里肌', s: '雞里肌', cat: 'protein', grp: 'chicken', g: 150, k: 110, p: 23, f: 1.5, c: 0, af: 10, pan: '每面煎 2–3 分鐘', steam: 1, boil: 8 },
+    { id: 'sousvide', n: '舒肥雞胸（超商）', s: '舒肥雞胸', cat: 'protein', grp: 'chicken', g: 100, k: 110, p: 24, f: 1.5, c: 1, ready: 1 },
+    { id: 'thigh', n: '去皮雞腿肉', s: '雞腿', cat: 'protein', grp: 'thigh', g: 150, k: 120, p: 20, f: 4, c: 0, af: 16, pan: '中火每面煎 4–5 分鐘', steam: 1, boil: 15 },
+    { id: 'groundchicken', n: '雞胸絞肉', s: '雞絞肉', cat: 'protein', g: 150, k: 143, p: 17.4, f: 8, c: 0, pan: '炒散到全白，約 4 分鐘', steam: 1, boil: 6, af: 12 },
+    { id: 'chickenball', n: '雞肉丸（市售）', s: '雞肉丸', cat: 'protein', g: 100, k: 130, p: 14, f: 6, c: 5, ready: 1 },
+    { id: 'pork', n: '豬里肌', s: '豬里肌', cat: 'protein', g: 120, k: 143, p: 21, f: 6, c: 0, af: 12, pan: '切片，每面煎 2 分鐘', steam: 1, boil: 5 },
+    { id: 'beef', n: '瘦牛肉片（牛腱/菲力）', s: '牛肉', cat: 'protein', grp: 'beef', g: 120, k: 140, p: 22, f: 6, c: 0, af: 10, pan: '大火快炒 2 分鐘', steam: 1, boil: 3 },
+    { id: 'steak', n: '牛排（板腱/沙朗）', s: '牛排', cat: 'protein', grp: 'beef', g: 150, k: 160, p: 20, f: 9, c: 0, af: 10, pan: '大火每面煎 2–3 分鐘，靜置 5 分鐘' },
+
+    // 海鮮
+    { id: 'shrimp', n: '蝦仁', s: '蝦仁', cat: 'sea', g: 120, k: 85, p: 20, f: 0.5, c: 0, af: 8, pan: '煎 1–2 分鐘到轉紅', steam: 0.5, boil: 2 },
+    { id: 'salmon', n: '鮭魚', s: '鮭魚', cat: 'sea', grp: 'oilyfish', g: 130, k: 208, p: 20.4, f: 13.4, c: 0, af: 10, pan: '中小火每面煎 3–4 分鐘', steam: 1, boil: 8 },
+    { id: 'mackerel', n: '鯖魚', s: '鯖魚', cat: 'sea', grp: 'oilyfish', g: 120, k: 205, p: 18.6, f: 13.9, c: 0, af: 12, pan: '皮朝下煎 4 分鐘，翻面 3 分鐘', steam: 1, boil: 8 },
+    { id: 'seabass', n: '鱸魚片', s: '鱸魚', cat: 'sea', grp: 'whitefish', g: 150, k: 97, p: 18.4, f: 2, c: 0, af: 10, pan: '每面煎 3 分鐘', steam: 1, boil: 6 },
+    { id: 'tilapia', n: '鯛魚片', s: '鯛魚', cat: 'sea', grp: 'whitefish', g: 150, k: 96, p: 20, f: 1.7, c: 0, af: 10, pan: '每面煎 3 分鐘', steam: 1, boil: 6 },
+    { id: 'cod', n: '鱈魚（真鱈）', s: '鱈魚', cat: 'sea', grp: 'whitefish', g: 150, k: 82, p: 18, f: 0.7, c: 0, af: 10, pan: '每面煎 3 分鐘', steam: 1, boil: 6 },
+    { id: 'basa', n: '巴沙魚', s: '巴沙魚', cat: 'sea', grp: 'whitefish', g: 150, k: 92, p: 16, f: 3, c: 0, af: 10, pan: '每面煎 3 分鐘', steam: 1, boil: 6 },
+    { id: 'squid', n: '透抽／魷魚', s: '透抽', cat: 'sea', g: 150, k: 92, p: 15.6, f: 1.4, c: 3.1, af: 7, pan: '大火快炒 1–2 分鐘', steam: 0.5, boil: 2 },
+    { id: 'tuna', n: '鮪魚罐頭（水煮）', s: '鮪魚', cat: 'sea', g: 80, k: 116, p: 25.5, f: 0.8, c: 0, ready: 1, pre: '瀝乾湯汁' },
+    { id: 'crabstick', n: '蟹肉棒', s: '蟹肉棒', cat: 'sea', g: 40, k: 95, p: 7.6, f: 0.5, c: 15, ready: 1 },
+
+    // 蛋與豆製品
+    { id: 'egg', n: '雞蛋（自己煮）', s: '蛋', cat: 'egg', grp: 'egg', u: 50, un: '顆', st: 50, g: 100, k: 143, p: 12.6, f: 9.5, c: 0.7, pan: '打散炒到半熟，或少油煎成荷包蛋', steam: 0.5, boil: 8, other: '水煮 8 分鐘，或氣炸鍋 150°C 13 分鐘做成水煮蛋' },
+    { id: 'boiledegg', n: '水煮蛋／茶葉蛋', s: '水煮蛋', cat: 'egg', grp: 'egg', u: 50, un: '顆', st: 50, g: 100, k: 143, p: 12.6, f: 9.5, c: 0.7, ready: 1 },
+    { id: 'onsen', n: '溫泉蛋', s: '溫泉蛋', cat: 'egg', grp: 'egg', u: 50, un: '顆', st: 50, g: 50, k: 143, p: 12.6, f: 9.5, c: 0.7, ready: 1 },
+    { id: 'friedegg', n: '荷包蛋（少油）', s: '荷包蛋', cat: 'egg', grp: 'egg', u: 50, un: '顆', st: 50, g: 50, k: 196, p: 13.6, f: 14.8, c: 0.9, pan: '少油小火煎 2–3 分鐘' },
+    { id: 'eggwhite', n: '蛋白（液蛋白）', s: '蛋白', cat: 'egg', grp: 'egg', st: 30, g: 90, k: 52, p: 11, f: 0.2, c: 0.7, pan: '和全蛋一起炒', steam: 0.5, boil: 2 },
+    { id: 'tofu', n: '板豆腐', s: '豆腐', cat: 'egg', grp: 'tofu', g: 200, k: 88, p: 8.5, f: 3.4, c: 6, af: 15, pan: '切塊，每面煎 3 分鐘到金黃', steam: 0.5, boil: 5 },
+    { id: 'silken', n: '嫩豆腐', s: '嫩豆腐', cat: 'egg', grp: 'tofu', g: 150, k: 51, p: 4.9, f: 2.4, c: 2, steam: 0.5, boil: 4, pan: '切塊，小火煎 2 分鐘' },
+    { id: 'dougan', n: '豆干', s: '豆干', cat: 'egg', g: 80, k: 190, p: 19, f: 9, c: 5, ready: 1 },
+    { id: 'edamame', n: '毛豆仁', s: '毛豆', cat: 'egg', g: 80, k: 121, p: 11.9, f: 5.2, c: 8.9, af: 10, pan: '炒 3 分鐘', steam: 0.5, boil: 5 },
+    { id: 'chickpea', n: '鷹嘴豆（熟）', s: '鷹嘴豆', cat: 'egg', g: 100, k: 164, p: 8.9, f: 2.6, c: 27, ready: 1, af: 15 },
+    { id: 'soymilk', n: '無糖豆漿', s: '豆漿', cat: 'egg', ml: 1, st: 50, g: 380, k: 35, p: 3.6, f: 1.8, c: 1.2, ready: 1 },
+
+    // 澱粉
+    { id: 'sweetpotato', n: '地瓜', s: '地瓜', cat: 'starch', grp: 'tuber', g: 150, k: 110, p: 1.5, f: 0.2, c: 26, af: 20, steam: 1.5, boil: 20 },
+    { id: 'potato', n: '馬鈴薯', s: '馬鈴薯', cat: 'starch', grp: 'tuber', g: 150, k: 80, p: 2, f: 0.1, c: 18, af: 20, steam: 1.5, boil: 18 },
+    { id: 'pumpkin', n: '南瓜', s: '南瓜', cat: 'starch', grp: 'tuber', g: 150, k: 74, p: 1.9, f: 0.2, c: 17, af: 15, steam: 1, boil: 12 },
+    { id: 'taro', n: '芋頭', s: '芋頭', cat: 'starch', grp: 'tuber', g: 100, k: 128, p: 2.5, f: 1.1, c: 26, steam: 1.5, boil: 20, af: 18 },
+    { id: 'yam', n: '山藥', s: '山藥', cat: 'starch', grp: 'tuber', g: 120, k: 73, p: 2.1, f: 0.2, c: 15, steam: 1, boil: 8, raw: 1 },
+    { id: 'corn', n: '玉米', s: '玉米', cat: 'starch', g: 100, k: 96, p: 3.4, f: 1.5, c: 21, af: 12, steam: 1, boil: 10 },
+    { id: 'quinoa', n: '藜麥飯（熟）', s: '藜麥飯', cat: 'starch', grp: 'grain', g: 150, k: 120, p: 4.4, f: 1.9, c: 21, ready: 1 },
+    { id: 'brownrice', n: '糙米飯（熟）', s: '糙米飯', cat: 'starch', grp: 'grain', g: 150, k: 150, p: 3.2, f: 1, c: 31, ready: 1 },
+    { id: 'fivegrain', n: '五穀飯（熟）', s: '五穀飯', cat: 'starch', grp: 'grain', g: 150, k: 160, p: 4, f: 1.5, c: 33, ready: 1 },
+    { id: 'rice', n: '白飯（熟）', s: '白飯', cat: 'starch', grp: 'grain', g: 150, k: 183, p: 3.1, f: 0.3, c: 41, ready: 1, refined: 1 },
+    { id: 'oats', n: '燕麥片', s: '燕麥', cat: 'starch', st: 10, g: 40, k: 380, p: 13, f: 7, c: 66, ready: 1 },
+    { id: 'toast', n: '全麥吐司', s: '吐司', cat: 'starch', pu: 1, un: '片', g: 2, k: 75, p: 3, f: 1, c: 13, ready: 1 },
+    { id: 'mantou', n: '全麥饅頭', s: '饅頭', cat: 'starch', pu: 1, un: '個', g: 1, k: 200, p: 7, f: 1.5, c: 40, ready: 1 },
+    { id: 'wrap', n: '全麥餅皮', s: '餅皮', cat: 'starch', pu: 1, un: '張', g: 1, k: 180, p: 5.5, f: 4.5, c: 30, ready: 1 },
+    { id: 'soba', n: '蕎麥麵（熟重）', s: '蕎麥麵', cat: 'starch', grp: 'noodle', g: 150, k: 99, p: 5, f: 0.1, c: 21, ready: 1, pre: '照包裝時間煮熟，沖冷水瀝乾' },
+    { id: 'pasta', n: '全麥義大利麵（熟重）', s: '義大利麵', cat: 'starch', grp: 'noodle', g: 150, k: 149, p: 6, f: 1.7, c: 30, ready: 1, pre: '照包裝時間煮熟瀝乾' },
+    { id: 'glassnoodle', n: '冬粉（乾重）', s: '冬粉', cat: 'starch', st: 10, g: 30, k: 351, p: 0.2, f: 0, c: 86, ready: 1, pre: '泡軟或燙 1 分鐘', refined: 1 },
+    { id: 'konjac', n: '蒟蒻麵', s: '蒟蒻麵', cat: 'starch', g: 200, k: 10, p: 0.1, f: 0, c: 3, ready: 1, pre: '沖水瀝乾' },
+
+    // 蔬菜
+    { id: 'broccoli', n: '綠花椰菜', s: '花椰菜', cat: 'veg', g: 100, k: 34, p: 2.8, f: 0.4, c: 6.6, af: 8, steam: 0.5, boil: 3 },
+    { id: 'cauliflower', n: '白花椰菜', s: '白花椰', cat: 'veg', g: 100, k: 25, p: 1.9, f: 0.3, c: 5, af: 10, steam: 0.5, boil: 3 },
+    { id: 'cabbage', n: '高麗菜', s: '高麗菜', cat: 'veg', g: 150, k: 25, p: 1.3, f: 0.1, c: 5.8, af: 8, steam: 0.5, boil: 3 },
+    { id: 'spinach', n: '菠菜', s: '菠菜', cat: 'veg', leafy: 1, g: 100, k: 23, p: 2.9, f: 0.4, c: 3.6, steam: 0.25, boil: 1 },
+    { id: 'waterspinach', n: '空心菜', s: '空心菜', cat: 'veg', leafy: 1, g: 150, k: 19, p: 2.6, f: 0.2, c: 3.1, boil: 1, pan: '大火炒 1 分鐘' },
+    { id: 'sweetpotatoleaf', n: '地瓜葉', s: '地瓜葉', cat: 'veg', leafy: 1, g: 150, k: 30, p: 3, f: 0.5, c: 4.5, boil: 1, pan: '大火炒 1 分鐘' },
+    { id: 'bokchoy', n: '青江菜', s: '青江菜', cat: 'veg', leafy: 1, g: 150, k: 13, p: 1.5, f: 0.2, c: 2.2, steam: 0.25, boil: 2 },
+    { id: 'zucchini', n: '櫛瓜', s: '櫛瓜', cat: 'veg', g: 150, k: 17, p: 1.2, f: 0.3, c: 3.1, af: 8, steam: 0.5, boil: 3 },
+    { id: 'eggplant', n: '茄子', s: '茄子', cat: 'veg', g: 150, k: 25, p: 1, f: 0.2, c: 5.9, af: 10, steam: 0.5, boil: 4 },
+    { id: 'bittermelon', n: '苦瓜', s: '苦瓜', cat: 'veg', g: 150, k: 17, p: 1, f: 0.2, c: 3.7, steam: 1, boil: 6, pan: '炒 3 分鐘' },
+    { id: 'luffa', n: '絲瓜', s: '絲瓜', cat: 'veg', g: 150, k: 20, p: 1.2, f: 0.2, c: 4.4, steam: 0.5, boil: 4, pan: '加一點水炒軟 3 分鐘' },
+    { id: 'asparagus', n: '蘆筍', s: '蘆筍', cat: 'veg', g: 120, k: 20, p: 2.2, f: 0.1, c: 3.9, af: 7, steam: 0.5, boil: 2 },
+    { id: 'greenbean', n: '四季豆', s: '四季豆', cat: 'veg', g: 100, k: 31, p: 1.8, f: 0.2, c: 7, af: 10, steam: 0.5, boil: 4 },
+    { id: 'okra', n: '秋葵', s: '秋葵', cat: 'veg', g: 100, k: 33, p: 1.9, f: 0.2, c: 7.5, af: 8, steam: 0.5, boil: 2 },
+    { id: 'babycorn', n: '玉米筍', s: '玉米筍', cat: 'veg', g: 60, k: 26, p: 2.3, f: 0.3, c: 5, af: 8, steam: 0.5, boil: 3 },
+    { id: 'beansprout', n: '豆芽菜', s: '豆芽', cat: 'veg', g: 100, k: 30, p: 3, f: 0.2, c: 6, boil: 1, pan: '大火炒 1 分鐘', steam: 0.25 },
+    { id: 'pepper', n: '甜椒', s: '甜椒', cat: 'veg', g: 100, k: 26, p: 1, f: 0.3, c: 6, af: 8, raw: 1, boil: 3 },
+    { id: 'carrot', n: '紅蘿蔔', s: '紅蘿蔔', cat: 'veg', g: 50, k: 41, p: 0.9, f: 0.2, c: 9.6, af: 12, raw: 1, steam: 1, boil: 6 },
+    { id: 'radish', n: '白蘿蔔', s: '白蘿蔔', cat: 'veg', g: 150, k: 18, p: 0.6, f: 0.1, c: 4.1, steam: 1.5, boil: 15 },
+    { id: 'onion', n: '洋蔥', s: '洋蔥', cat: 'veg', g: 60, k: 40, p: 1.1, f: 0.1, c: 9.3, af: 10, raw: 1, boil: 5 },
+    { id: 'tomato', n: '番茄', s: '番茄', cat: 'veg', g: 150, k: 18, p: 0.9, f: 0.2, c: 3.9, raw: 1, boil: 4 },
+    { id: 'cherrytomato', n: '小番茄', s: '小番茄', cat: 'veg', g: 80, k: 25, p: 1, f: 0.3, c: 5, af: 8, raw: 1 },
+    { id: 'cucumber', n: '小黃瓜', s: '小黃瓜', cat: 'veg', g: 150, k: 15, p: 0.7, f: 0.1, c: 3.6, raw: 1 },
+    { id: 'lettuce', n: '生菜沙拉', s: '生菜', cat: 'veg', g: 100, k: 15, p: 1.4, f: 0.2, c: 2.9, raw: 1 },
+    { id: 'scallion', n: '青蔥', s: '蔥', cat: 'veg', g: 10, st: 5, k: 32, p: 1.8, f: 0.2, c: 7.3, raw: 1 },
+
+    // 菇類與其他
+    { id: 'mushroom', n: '蘑菇／鴻喜菇', s: '菇', cat: 'mush', grp: 'mush', g: 80, k: 22, p: 3.1, f: 0.3, c: 3.3, af: 8, steam: 0.5, boil: 3 },
+    { id: 'kingoyster', n: '杏鮑菇', s: '杏鮑菇', cat: 'mush', grp: 'mush', g: 100, k: 35, p: 3.3, f: 0.4, c: 6, af: 10, steam: 0.5, boil: 4, pan: '切片乾煎 3 分鐘' },
+    { id: 'enoki', n: '金針菇', s: '金針菇', cat: 'mush', grp: 'mush', g: 80, k: 37, p: 2.7, f: 0.3, c: 7.8, af: 8, steam: 0.5, boil: 2 },
+    { id: 'shiitake', n: '新鮮香菇', s: '香菇', cat: 'mush', grp: 'mush', g: 60, k: 34, p: 2.2, f: 0.5, c: 6.8, af: 8, steam: 0.5, boil: 4 },
+    { id: 'woodear', n: '黑木耳', s: '木耳', cat: 'mush', g: 60, k: 35, p: 0.9, f: 0.1, c: 8.8, boil: 3, steam: 0.5, pan: '炒 2 分鐘' },
+    { id: 'kelp', n: '海帶', s: '海帶', cat: 'mush', g: 80, k: 43, p: 1.7, f: 0.6, c: 9.6, ready: 1 },
+    { id: 'kimchi', n: '韓式泡菜', s: '泡菜', cat: 'mush', g: 50, k: 15, p: 1.1, f: 0.5, c: 2.4, ready: 1 },
+    { id: 'nori', n: '海苔', s: '海苔', cat: 'mush', g: 3, st: 1, k: 350, p: 40, f: 5, c: 45, ready: 1 },
+
+    // 水果
+    { id: 'banana', n: '香蕉', s: '香蕉', cat: 'fruit', g: 100, k: 89, p: 1.1, f: 0.3, c: 23, ready: 1 },
+    { id: 'guava', n: '芭樂', s: '芭樂', cat: 'fruit', g: 150, k: 68, p: 2.6, f: 1, c: 14, ready: 1 },
+    { id: 'kiwi', n: '奇異果', s: '奇異果', cat: 'fruit', g: 100, k: 61, p: 1.1, f: 0.5, c: 15, ready: 1 },
+    { id: 'blueberry', n: '藍莓', s: '藍莓', cat: 'fruit', g: 80, k: 57, p: 0.7, f: 0.3, c: 14, ready: 1 },
+    { id: 'strawberry', n: '草莓', s: '草莓', cat: 'fruit', g: 100, k: 32, p: 0.7, f: 0.3, c: 7.7, ready: 1 },
+    { id: 'apple', n: '蘋果', s: '蘋果', cat: 'fruit', g: 150, k: 52, p: 0.3, f: 0.2, c: 14, ready: 1 },
+    { id: 'orange', n: '橘子', s: '橘子', cat: 'fruit', g: 120, k: 47, p: 0.9, f: 0.1, c: 12, ready: 1 },
+    { id: 'grapefruit', n: '葡萄柚', s: '葡萄柚', cat: 'fruit', g: 150, k: 42, p: 0.8, f: 0.1, c: 11, ready: 1 },
+    { id: 'pear', n: '梨子', s: '梨子', cat: 'fruit', g: 150, k: 57, p: 0.4, f: 0.1, c: 15, ready: 1 },
+    { id: 'cherry', n: '櫻桃', s: '櫻桃', cat: 'fruit', g: 80, k: 63, p: 1, f: 0.2, c: 16, ready: 1 },
+    { id: 'pineapple', n: '鳳梨', s: '鳳梨', cat: 'fruit', g: 100, k: 50, p: 0.5, f: 0.1, c: 13, ready: 1 },
+    { id: 'mango', n: '芒果', s: '芒果', cat: 'fruit', g: 100, k: 60, p: 0.8, f: 0.4, c: 15, ready: 1 },
+    { id: 'watermelon', n: '西瓜', s: '西瓜', cat: 'fruit', g: 200, k: 30, p: 0.6, f: 0.2, c: 7.6, ready: 1 },
+    { id: 'dragonfruit', n: '火龍果', s: '火龍果', cat: 'fruit', g: 150, k: 50, p: 1.1, f: 0.4, c: 11, ready: 1 },
+    { id: 'grape', n: '葡萄', s: '葡萄', cat: 'fruit', g: 80, k: 69, p: 0.7, f: 0.2, c: 18, ready: 1 },
+
+    // 乳品
+    { id: 'yogurt', n: '無糖希臘優格', s: '優格', cat: 'dairy', g: 150, k: 73, p: 9.9, f: 1.9, c: 3.9, ready: 1 },
+    { id: 'kefir', n: '無糖優酪乳', s: '優酪乳', cat: 'dairy', ml: 1, st: 50, g: 200, k: 60, p: 3.3, f: 2.3, c: 6, ready: 1 },
+    { id: 'cottage', n: '茅屋起司', s: '茅屋起司', cat: 'dairy', g: 100, k: 98, p: 11, f: 4.3, c: 3.4, ready: 1 },
+    { id: 'milk', n: '低脂鮮奶', s: '牛奶', cat: 'dairy', ml: 1, st: 60, g: 240, k: 45, p: 3.2, f: 1.5, c: 4.8, ready: 1 },
+    { id: 'cheese', n: '低脂起司片', s: '起司', cat: 'dairy', pu: 1, un: '片', g: 1, k: 55, p: 4, f: 3.5, c: 1.5, ready: 1 },
+
+    // 好油脂
+    { id: 'avocado', n: '酪梨', s: '酪梨', cat: 'fat', g: 70, k: 160, p: 2, f: 15, c: 9, ready: 1 },
+    { id: 'almond', n: '杏仁', s: '杏仁', cat: 'fat', st: 5, g: 20, k: 580, p: 21, f: 50, c: 22, ready: 1 },
+    { id: 'walnut', n: '核桃', s: '核桃', cat: 'fat', st: 5, g: 20, k: 650, p: 15, f: 65, c: 14, ready: 1 },
+    { id: 'cashew', n: '腰果', s: '腰果', cat: 'fat', st: 5, g: 20, k: 553, p: 18, f: 44, c: 30, ready: 1 },
+    { id: 'peanut', n: '花生', s: '花生', cat: 'fat', st: 5, g: 15, k: 567, p: 26, f: 49, c: 16, ready: 1 },
+    { id: 'pumpkinseed', n: '南瓜子', s: '南瓜子', cat: 'fat', st: 5, g: 15, k: 559, p: 30, f: 49, c: 11, ready: 1 },
+    { id: 'pbutter', n: '無糖花生醬', s: '花生醬', cat: 'fat', st: 5, g: 15, k: 590, p: 25, f: 50, c: 20, ready: 1 },
+    { id: 'sesamepaste', n: '芝麻醬', s: '芝麻醬', cat: 'fat', st: 5, g: 10, k: 595, p: 17, f: 53, c: 21, ready: 1 },
+    { id: 'chia', n: '奇亞籽', s: '奇亞籽', cat: 'fat', st: 5, g: 10, k: 486, p: 17, f: 31, c: 42, ready: 1 },
+    { id: 'oil', n: '橄欖油', s: '橄欖油', cat: 'fat', st: 5, g: 5, k: 884, p: 0, f: 100, c: 0, ready: 1 },
+
+    // 只在食譜裡用
+    { id: 'crumbs', n: '全麥麵包粉', cat: 'hide', g: 15, k: 380, p: 13, f: 5, c: 70, ready: 1 },
+    { id: 'starchpowder', n: '玉米粉', cat: 'hide', g: 5, k: 381, p: 0.3, f: 0.1, c: 91, ready: 1 }
+  ];
+
+  // Classic pairings shown first in 搭配推薦: id -> [[partner, reason]]
+  var PAIR = {
+    chicken: [['sweetpotato', '蛋白質配好消化的碳水'], ['broccoli', '經典健身組合'], ['avocado', '補好油脂，雞胸不乾'], ['yogurt', '當醃料讓雞胸變嫩'], ['quinoa', '能量碗主食'], ['pepper', '烤或炒都很搭']],
+    chickentender: [['kingoyster', '一起氣炸，口感互補'], ['yogurt', '做優格沾醬'], ['oats', '煮鹹粥']],
+    thigh: [['kingoyster', '杏鮑菇像肉，增加飽足感'], ['cabbage', '電鍋一起蒸很甜'], ['sweetpotato', '一起氣炸'], ['onion', '親子丼基底']],
+    groundchicken: [['tomato', '打拋肉必備'], ['tofu', '麻婆豆腐'], ['zucchini', '做櫛瓜船']],
+    beef: [['broccoli', '牛肉炒花椰菜'], ['beansprout', '快炒很下飯'], ['kimchi', '韓式拌飯'], ['pumpkin', '牛肉配南瓜甜味']],
+    steak: [['pumpkin', '牛排佐南瓜'], ['asparagus', '西式經典配菜'], ['potato', '牛排配薯']],
+    pork: [['cabbage', '便當經典'], ['kimchi', '泡菜豬肉'], ['enoki', '電鍋一起蒸']],
+    shrimp: [['egg', '滑蛋或蒸蛋，雙蛋白'], ['zucchini', '一起氣炸'], ['silken', '電鍋豆腐煲'], ['soba', '蕎麥拌麵']],
+    salmon: [['asparagus', '經典組合'], ['spinach', '補鐵和葉酸'], ['sweetpotato', '補碳水'], ['pumpkin', '味噌鮭魚配南瓜']],
+    mackerel: [['cabbage', '烤高麗菜解膩'], ['radish', '日式鹽烤配蘿蔔'], ['brownrice', '定食組合']],
+    squid: [['pepper', '透抽炒彩椒'], ['onion', '炒出甜味']],
+    tuna: [['cucumber', '天然猛健樂組合'], ['corn', '鮪魚玉米經典'], ['boiledegg', '雙蛋白'], ['avocado', '鮪魚酪梨沙拉'], ['chickpea', '地中海沙拉']],
+    egg: [['tomato', '番茄炒蛋'], ['spinach', '菠菜烘蛋'], ['shrimp', '蝦仁滑蛋'], ['oats', '燕麥鹹粥']],
+    boiledegg: [['sweetpotato', '超商早餐經典'], ['soymilk', '超商早餐經典'], ['tuna', '雙蛋白沙拉']],
+    tofu: [['groundchicken', '麻婆豆腐'], ['mushroom', '一起煎或煮湯'], ['kimchi', '泡菜豆腐']],
+    silken: [['shrimp', '電鍋豆腐煲'], ['egg', '蛋花湯']],
+    sweetpotato: [['chicken', '增肌減脂標配'], ['boiledegg', '超商早餐經典'], ['soymilk', '飽足早餐']],
+    pumpkin: [['chicken', '電鍋一起蒸'], ['salmon', '烤味噌鮭魚'], ['steak', '牛排配菜']],
+    oats: [['banana', '鬆餅或燕麥碗'], ['yogurt', '早餐碗'], ['whey', '提高蛋白質'], ['blueberry', '補抗氧化']],
+    yogurt: [['blueberry', '經典早餐碗'], ['oats', '增加飽足'], ['chia', '補纖維'], ['banana', '自然甜味']],
+    whey: [['banana', '訓練後補碳水'], ['milk', '提高蛋白質'], ['oats', '隔夜燕麥']],
+    banana: [['whey', '訓練後奶昔'], ['pbutter', '少量就很香'], ['oats', '香蕉燕麥鬆餅']],
+    broccoli: [['chicken', '經典健身組合'], ['beef', '牛肉炒花椰菜'], ['shrimp', '一起氣炸或燙']],
+    avocado: [['tuna', '鮪魚酪梨沙拉'], ['egg', '酪梨蛋吐司'], ['toast', '酪梨吐司']],
+    cucumber: [['tuna', '天然猛健樂'], ['chicken', '涼拌雞絲'], ['soba', '涼麵配料']],
+    soba: [['chicken', '涼拌雞絲蕎麥麵'], ['shrimp', '蝦仁拌麵'], ['cucumber', '清爽配料']],
+    kingoyster: [['thigh', '電鍋雞腿杏鮑菇'], ['chickentender', '一起氣炸']],
+    cottage: [['pineapple', '酸甜解膩'], ['blueberry', '高蛋白點心']]
+  };
+
+  // =====================================================================
+  // Recipe library. items: [foodId, 減脂份, 增肌份(optional)]; 0 = not included.
+  // pt/ct: prep/cook minutes. taste: Claude's taste score (1–5).
+  // =====================================================================
+  var SRC = {
+    b68835: { n: 'Beauty美人圈：低脂氣炸食譜', u: 'https://www.beauty321.com/post/68835' },
+    b55274: { n: 'Beauty美人圈：8 款減脂便當', u: 'https://www.beauty321.com/post/55274' },
+    b58280: { n: 'Beauty美人圈：7 款低碳水食譜', u: 'https://www.beauty321.com/post/58280' },
+    tvbs: { n: 'TVBS 健康2.0：營養師超商組合', u: 'https://health.tvbs.com.tw/nutrition/366480' },
+    angela: { n: 'TikTok @angela_dietitian', u: 'https://www.tiktok.com/@angela_dietitian/video/7352095856302001413' },
+    digby: { n: 'Threads @digby1030', u: 'https://www.threads.com/@digby1030/post/DWvKyvXgfZF' },
+    penguin: { n: 'Threads @penguin_healthy', u: 'https://www.threads.com/@penguin_healthy/post/DPvEOODiTe2' },
+    saved: { n: '你收藏的 Threads 貼文' }
+  };
+  var METHODS = ['氣炸鍋', '烤箱', '平底鍋', '電鍋', '水煮', '免開火', '外食'];
+  var R = [
+    // ---------------- 氣炸鍋 ----------------
+    { id: 'salmon-af', n: '氣炸鮭魚蔬菜丁', m: '氣炸鍋', meal: '正餐', pt: 10, ct: 10, tag: '熱門', taste: 4.5, tn: '鮭魚油脂香，小番茄烤過會爆汁。', src: 'saved',
+      desc: '切丁拌勻丟進去，10 分鐘出餐。累到只想叫外送的晚上用得到。',
+      items: [['salmon', 130, 200], ['oil', 5, 13], ['broccoli', 50], ['mushroom', 70], ['cherrytomato', 80]],
+      season: '鹽、黑胡椒、奧勒岡、檸檬',
+      steps: ['鮭魚切 2.5 公分小丁，用廚房紙巾擦乾水分。', '鮭魚、蔬菜、橄欖油和調味料拌勻，在炸籃平鋪一層。', '200°C 烤 10 分鐘，中途不要搖。', '起鍋擠點檸檬就完成。'],
+      done: '鮭魚變不透明，用叉子一撥就散。', tips: ['擦乾水分才會微焦，不會烤出一堆水。', '中途不要搖，鮭魚丁才不會碎。'],
+      keep: '當天吃最好；冷藏 1 天，回烤 180°C 3 分鐘。', swap: '鮭魚換鯛魚或蝦仁，熱量更低。', alt: '烤箱：220°C，蔬菜先烤 8 分鐘，再放鮭魚烤 8–10 分鐘。' },
+    { id: 'yogurt-chicken', n: '優格醃氣炸雞胸', m: '氣炸鍋', meal: '正餐', pt: 25, ct: 15, tag: '熱門', taste: 4, tn: '外酥內嫩，像健康版鹹酥雞。', src: 'b68835',
+      desc: '用優格醃、薄裹麵包粉，口感像炸雞，油脂少很多。',
+      items: [['chicken', 150, 220], ['yogurt', 30], ['crumbs', 15], ['lettuce', 80]],
+      season: '蒜粉、紅椒粉、鹽、黑胡椒',
+      steps: ['雞胸切塊，用優格、蒜粉、紅椒粉、鹽、黑胡椒抓勻，冷藏醃 20 分鐘（可以前一晚先醃）。', '每塊裹上薄薄一層全麥麵包粉，炸籃噴少許油。', '180°C 烤 12–15 分鐘，中途翻面一次。', '配生菜一起吃。'],
+      done: '最厚的一塊切開全白，沒有粉紅色。', tips: ['優格的酸讓雞胸變嫩，至少醃 20 分鐘。', '麵包粉表面噴一點油才會金黃。'],
+      keep: '冷藏 3 天，氣炸 180°C 4 分鐘回脆。', swap: '雞胸換雞里肌，更嫩也更快熟。', alt: '烤箱：200°C 烤 18–20 分鐘。' },
+    { id: 'thigh-sp', n: '氣炸蒜香雞腿地瓜', m: '氣炸鍋', meal: '正餐', pt: 15, ct: 25, taste: 4.5, tn: '雞腿多汁，地瓜邊緣烤到焦糖化。',
+      desc: '主食、蛋白質、蔬菜一鍋完成，雞腿比雞胸多汁。',
+      items: [['thigh', 150, 200], ['sweetpotato', 150, 200], ['broccoli', 80], ['oil', 5]],
+      season: '蒜末、醬油 1 小匙、黑胡椒',
+      steps: ['雞腿肉用蒜末、醬油、黑胡椒醃 10 分鐘；地瓜切 2 公分塊。', '地瓜拌一半的油，200°C 先烤 10 分鐘。', '放入雞腿肉和花椰菜，拌上剩下的油，再烤 12–14 分鐘。'],
+      done: '雞腿切開沒有血水，地瓜用筷子能輕鬆插入。', tips: ['雞皮去掉約可少 5g 脂肪。', '地瓜切一樣大小才會同時熟。'],
+      keep: '冷藏 3 天，適合當便當。', swap: '地瓜換南瓜或馬鈴薯。', alt: '烤箱：220°C，地瓜先烤 15 分鐘，再放雞腿和花椰菜烤 15–18 分鐘。' },
+    { id: 'shrimp-zuc', n: '氣炸蒜蝦櫛瓜', m: '氣炸鍋', meal: '正餐', pt: 10, ct: 10, taste: 4, tn: '蒜香蝦清爽，櫛瓜多汁。',
+      desc: '低脂高蛋白，增肌份加一碗藜麥飯。',
+      items: [['shrimp', 150, 220], ['zucchini', 150], ['cherrytomato', 80], ['oil', 5], ['quinoa', 0, 150]],
+      season: '蒜末、紅椒粉、鹽、檸檬',
+      steps: ['蝦仁擦乾，櫛瓜切半月片。', '全部食材加油和調味料拌勻，平鋪炸籃。', '180°C 烤 8–10 分鐘，中途翻一次。', '擠檸檬汁上桌。'],
+      done: '蝦身變紅、彎成 C 字；彎成 O 字就過熟了。', tips: ['冷凍蝦仁泡冷水解凍再擦乾。', '檸檬汁最後擠，香氣最好。'],
+      keep: '當天吃完。', swap: '櫛瓜換蘆筍或甜椒。', alt: '平底鍋：先炒蝦 2 分鐘盛起，再炒櫛瓜 3 分鐘，蝦放回拌勻。' },
+    { id: 'chicken-wrap', n: '氣炸雞胸起司捲餅', m: '氣炸鍋', meal: '正餐', pt: 10, ct: 18, tag: '熱門', taste: 4.5, tn: '酥脆餅皮加融化起司，滿足感高。', src: 'b68835',
+      desc: '可以帶著走的高蛋白捲餅，表皮烤得酥脆。',
+      items: [['chicken', 120, 170], ['wrap', 1], ['cheese', 1], ['lettuce', 40], ['tomato', 50]],
+      season: '鹽、黑胡椒；醬可用優格加芥末',
+      steps: ['雞胸切條，鹽和黑胡椒調味，180°C 氣炸 10 分鐘。', '餅皮鋪上起司、生菜、番茄和雞胸，捲緊。', '接縫朝下放回炸籃，180°C 烤 6–8 分鐘。'],
+      done: '餅皮表面金黃、起司融化。', tips: ['捲緊、接縫朝下烤才不會散。'],
+      keep: '雞胸可先烤好冷藏 3 天，要吃再捲。', swap: '雞胸換鮪魚或舒肥雞胸，就不用先烤。', alt: '平底鍋：捲好後乾煎，兩面各 2 分鐘。' },
+    { id: 'zucchini-boat', n: '氣炸櫛瓜船', m: '氣炸鍋', meal: '正餐', pt: 15, ct: 12, taste: 4.5, tn: '起司焗烤感，櫛瓜多汁不油膩。',
+      desc: '用櫛瓜當容器，像低碳版焗烤。',
+      items: [['zucchini', 200], ['groundchicken', 120, 170], ['tomato', 60], ['onion', 30], ['cheese', 1, 2], ['oil', 3]],
+      season: '鹽、黑胡椒、義式香料',
+      steps: ['櫛瓜縱切對半，用湯匙挖出中間的籽，變成船狀。', '鍋裡放油，炒雞絞肉、洋蔥丁和番茄丁到熟，加鹽、黑胡椒和義式香料。', '把餡料填進櫛瓜，鋪上起司。', '氣炸 180°C 10–12 分鐘。'],
+      done: '起司金黃冒泡，櫛瓜用叉子能輕鬆穿透。', tips: ['挖出來的櫛瓜肉可以切碎一起炒進餡料。'],
+      keep: '當天吃最好。', swap: '雞絞肉換鮪魚罐頭（不用炒）。', alt: '烤箱：200°C 15–18 分鐘。' },
+    { id: 'chicken-meatball', n: '氣炸雞胸肉丸', m: '氣炸鍋', meal: '點心', pt: 15, ct: 12, tag: '備餐', taste: 4, tn: '彈牙多汁，可直接吃或丟進湯裡。',
+      desc: '一次做 12 顆，當點心或加進湯、便當都方便。',
+      items: [['groundchicken', 200, 300], ['eggwhite', 30], ['onion', 40], ['carrot', 30], ['starchpowder', 5]],
+      season: '鹽、白胡椒、醬油少許、薑末',
+      steps: ['洋蔥和紅蘿蔔切細末。', '所有食材加調味料，同方向攪拌 2 分鐘到有黏性。', '手沾水搓成約 12 顆丸子。', '炸籃噴油，180°C 烤 12 分鐘，中途翻一次。'],
+      done: '丸子切開全白，按壓有彈性。', tips: ['同方向攪拌才會出筋，口感彈牙。'],
+      keep: '冷藏 3 天，冷凍 1 個月；冷凍的可直接下鍋煮湯。', swap: '雞絞肉換一半豆腐，口感更軟、熱量更低。', alt: '電鍋：外鍋 1 杯水蒸熟。' },
+    { id: 'tender-kingoyster', n: '氣炸雞里肌杏鮑菇', m: '氣炸鍋', meal: '正餐', pt: 10, ct: 10, taste: 4, tn: '雞里肌很嫩，杏鮑菇烤過像肉。',
+      desc: '雞里肌比雞胸更嫩更快熟，配優格芥末醬。',
+      items: [['chickentender', 150, 220], ['kingoyster', 120], ['oil', 3], ['yogurt', 30], ['sweetpotato', 0, 150]],
+      season: '紅椒粉、蒜粉、鹽；沾醬：優格加芥末籽醬',
+      steps: ['雞里肌去筋，杏鮑菇切長條。', '拌油和紅椒粉、蒜粉、鹽。', '200°C 烤 10 分鐘，中途翻一次。', '優格加 1 小匙芥末籽醬當沾醬。'],
+      done: '雞里肌最厚處全白。', tips: ['雞里肌中間那條白筋拉掉，口感更好。'],
+      keep: '冷藏 2 天。', swap: '杏鮑菇換四季豆。' },
+    { id: 'tofu-af', n: '氣炸脆皮豆腐', m: '氣炸鍋', meal: '點心', pt: 10, ct: 15, taste: 4, tn: '外脆內嫩，沾醬油膏很下飯。',
+      desc: '便宜的植物蛋白，當點心或配菜都適合。',
+      items: [['tofu', 250], ['starchpowder', 5], ['oil', 5]],
+      season: '醬油、蒜粉、白胡椒或七味粉',
+      steps: ['板豆腐用紙巾壓出水分，切 2 公分方塊。', '先拌醬油和蒜粉，再撒玉米粉讓表面均勻沾上。', '炸籃噴油，200°C 烤 15 分鐘，中途翻一次。'],
+      done: '表面金黃，按壓有脆殼。', tips: ['豆腐一定要壓乾水分，否則不脆。'],
+      keep: '當天吃最脆。', swap: '可以撒胡椒鹽當鹹酥豆腐。', alt: '平底鍋：少油每面煎 3 分鐘。' },
+    { id: 'mackerel-af', n: '氣炸鯖魚烤高麗菜', m: '氣炸鍋', meal: '正餐', pt: 5, ct: 12, taste: 4.5, tn: '魚皮焦香，像日式鹽烤定食。',
+      desc: '鯖魚補 Omega-3，高麗菜烤過會變甜。',
+      items: [['mackerel', 120, 160], ['cabbage', 150], ['oil', 3], ['brownrice', 0, 150]],
+      season: '鹽、檸檬',
+      steps: ['鯖魚兩面撒少許鹽，皮朝上放炸籃；高麗菜切大塊拌油。', '200°C 烤 12 分鐘，第 4 分鐘放入高麗菜。', '擠檸檬汁。'],
+      done: '魚皮起泡焦香，魚肉一撥就散。', tips: ['市售鯖魚多半已醃鹽，鹽要少撒。'],
+      keep: '當天吃。', swap: '鯖魚換鮭魚或秋刀魚。', alt: '烤箱：220°C 烤 15 分鐘。' },
+    { id: 'sp-fries', n: '氣炸地瓜條', m: '氣炸鍋', meal: '點心', pt: 15, ct: 18, taste: 4, tn: '外脆內鬆，撒肉桂就像甜點。',
+      desc: '訓練前的碳水點心，取代炸薯條。',
+      items: [['sweetpotato', 150], ['oil', 5]],
+      season: '鹽、紅椒粉或肉桂粉',
+      steps: ['地瓜切 1 公分粗條，泡水 10 分鐘後擦乾。', '拌油和調味料，平鋪炸籃不要疊。', '200°C 烤 15–18 分鐘，中途搖一次。'],
+      done: '邊緣微焦、表面起皺。', tips: ['泡水去掉表面澱粉會更脆。'],
+      keep: '當天吃。', swap: '地瓜換馬鈴薯或南瓜。' },
+
+    // ---------------- 烤箱 ----------------
+    { id: 'sheet-chicken', n: '烤盤雞胸彩椒', m: '烤箱', meal: '正餐', pt: 10, ct: 20, taste: 4, tn: '香料烤蔬菜甜味出來，很下飯。',
+      desc: '一個烤盤搞定，適合一次做兩天份。',
+      items: [['chicken', 150, 220], ['pepper', 100], ['onion', 60], ['broccoli', 80], ['oil', 5, 10], ['brownrice', 0, 150]],
+      season: '義式香料、蒜粉、鹽、黑胡椒',
+      steps: ['烤箱預熱 220°C，烤盤鋪烘焙紙。', '雞胸、彩椒、洋蔥切塊，和花椰菜、油、調味料拌勻後平鋪。', '烤 18–20 分鐘，中途翻一次。'],
+      done: '雞肉切開全白，汁液清澈。', tips: ['蔬菜切得比雞肉大一點，才會同時熟。', '烤盤不要擠，才是烤不是蒸。'],
+      keep: '冷藏 3–4 天。', swap: '雞胸換豬里肌或雞腿。', alt: '氣炸鍋：200°C 14–16 分鐘，分兩批不要疊。' },
+    { id: 'salmon-asp', n: '烤鮭魚蘆筍', m: '烤箱', meal: '正餐', pt: 5, ct: 15, taste: 4.5, tn: '簡單但像餐廳料理。',
+      desc: '經典的低碳組合，增肌份加馬鈴薯。',
+      items: [['salmon', 130, 200], ['asparagus', 120], ['oil', 3], ['potato', 0, 150]],
+      season: '鹽、黑胡椒、檸檬片',
+      steps: ['烤箱預熱 200°C，蘆筍折掉老硬的根部。增肌份的馬鈴薯切塊先烤 15 分鐘。', '鮭魚和蘆筍放烤盤，刷油、撒鹽和黑胡椒，放幾片檸檬。', '烤 12–15 分鐘。'],
+      done: '鮭魚中心剛變不透明。', tips: ['蘆筍用手折，自然斷的地方就是老嫩分界。'],
+      keep: '當天吃。', swap: '蘆筍換花椰菜或櫛瓜。', alt: '氣炸鍋：200°C 10 分鐘。' },
+    { id: 'miso-salmon', n: '烤味噌鮭魚南瓜', m: '烤箱', meal: '正餐', pt: 10, ct: 18, taste: 4.5, tn: '味噌鹹甜，南瓜烤到鬆軟。',
+      desc: '日式風味，南瓜當主食，纖維也夠。',
+      items: [['salmon', 130, 200], ['pumpkin', 150, 200], ['broccoli', 80], ['oil', 3]],
+      season: '味噌 1 小匙、味醂 1 小匙',
+      steps: ['味噌和味醂調勻，抹在鮭魚表面醃 10 分鐘。', '烤箱預熱 200°C，南瓜切塊拌油，先烤 8 分鐘。', '放入鮭魚和花椰菜，再烤 10–12 分鐘。'],
+      done: '鮭魚表面微焦、中心不透明；南瓜能輕鬆插入。', tips: ['味噌容易焦，表面焦黑可以蓋鋁箔。'],
+      keep: '冷藏 1 天。', swap: '南瓜換地瓜。', alt: '氣炸鍋：南瓜 200°C 先 6 分鐘，放鮭魚再 10 分鐘。' },
+    { id: 'egg-muffin', n: '烤箱蔬菜蛋杯', m: '烤箱', meal: '早餐', pt: 10, ct: 20, tag: '備餐', taste: 3.5, tn: '像蔬菜烘蛋，口味偏清淡。',
+      desc: '一次做 3 杯當一餐，冷藏可放 3 天。',
+      items: [['egg', 100, 150], ['eggwhite', 60, 90], ['spinach', 40], ['cherrytomato', 40], ['mushroom', 30], ['toast', 0, 2]],
+      season: '鹽、黑胡椒',
+      steps: ['烤箱預熱 180°C，馬芬模刷一點油。', '蔬菜切小丁分到杯裡。', '蛋和蛋白加鹽、黑胡椒打勻，倒入杯中約八分滿。', '烤 18–20 分鐘。'],
+      done: '中心凝固，牙籤插入不沾蛋液。', tips: ['加一點起司或番茄能提味。'],
+      keep: '冷藏 3 天，微波 30 秒加熱。', swap: '菠菜換花椰菜碎或甜椒丁。', alt: '氣炸鍋：用矽膠杯，160°C 12–14 分鐘。' },
+
+    // ---------------- 平底鍋 ----------------
+    { id: 'three-cup', n: '減脂三杯雞腿杏鮑菇', m: '平底鍋', meal: '正餐', pt: 10, ct: 15, tag: '台式', taste: 5, tn: '九層塔香氣十足，最下飯的減脂菜。',
+      desc: '傳統三杯用一整杯麻油，這版只用 1 小匙油，杏鮑菇吸飽醬汁。',
+      items: [['thigh', 150, 200], ['kingoyster', 100], ['oil', 5], ['brownrice', 0, 150]],
+      season: '薑片、蒜頭、九層塔、醬油 1 大匙、米酒 1 大匙、少許糖',
+      steps: ['雞腿肉切塊，杏鮑菇滾刀切塊。', '鍋裡放油，小火煸香薑片和蒜頭。', '放雞腿肉煎到表面金黃，再放杏鮑菇。', '加醬油、米酒和少許糖，蓋鍋燜 5 分鐘，開蓋收汁。', '關火前加一大把九層塔拌勻。'],
+      done: '醬汁收到濃稠，雞肉切開沒有血水。', tips: ['想要麻油香，最後滴幾滴就好。', '杏鮑菇吸醬汁，口感像肉。'],
+      keep: '冷藏 3 天，很適合便當。', swap: '雞腿換雞胸，燜的時間縮短到 3 分鐘。' },
+    { id: 'kungpao', n: '宮保雞丁減油版', m: '平底鍋', meal: '正餐', pt: 10, ct: 8, tag: '台式', taste: 4.5, tn: '麻辣酸甜，花生香。',
+      desc: '花生只放 10g，香氣夠熱量不爆。',
+      items: [['chicken', 150, 220], ['pepper', 80], ['scallion', 15], ['peanut', 10], ['oil', 5], ['rice', 0, 150]],
+      season: '乾辣椒、花椒、蒜末、醬油 1 大匙、烏醋 1 小匙、少許糖、玉米粉',
+      steps: ['雞胸切丁，用 1 小匙醬油和少許玉米粉抓勻。', '醬汁：醬油、烏醋、糖、1 大匙水和少許玉米粉調好。', '鍋熱放油，小火炒香乾辣椒和花椒，放雞丁炒到變色。', '放甜椒和蔥段拌炒，倒入醬汁收汁，最後撒花生。'],
+      done: '雞丁全白，醬汁均勻包覆。', tips: ['乾辣椒小火炒，大火容易焦苦。'],
+      keep: '冷藏 2 天。', swap: '雞胸換蝦仁。' },
+    { id: 'gapao', n: '打拋雞肉飯', m: '平底鍋', meal: '正餐', pt: 5, ct: 10, tag: '熱門', taste: 5, tn: '泰式酸辣，超級下飯。',
+      desc: '用雞胸絞肉做打拋，配荷包蛋和糙米飯。',
+      items: [['groundchicken', 150, 200], ['tomato', 100], ['onion', 40], ['friedegg', 50], ['brownrice', 120, 180], ['oil', 3]],
+      season: '蒜末、辣椒、魚露 1 小匙、醬油 1 小匙、少許糖、九層塔、檸檬',
+      steps: ['鍋熱放油，炒香蒜末、辣椒和洋蔥。', '放雞絞肉炒散到變白。', '加番茄塊、魚露、醬油和少許糖，炒到番茄軟化。', '關火加九層塔，配糙米飯和荷包蛋。'],
+      done: '絞肉完全變白，沒有粉紅色。', tips: ['請肉攤用雞胸現絞，脂肪最低。', '擠點檸檬汁更道地。'],
+      keep: '打拋肉冷藏 3 天，可一次多做。', swap: '雞絞肉換瘦豬絞肉。' },
+    { id: 'mapo', n: '麻婆豆腐減油版', m: '平底鍋', meal: '正餐', pt: 5, ct: 10, tag: '台式', taste: 4.5, tn: '麻辣下飯，豆腐滑嫩。',
+      desc: '雞絞肉取代豬絞肉，油量減到 1 小匙。',
+      items: [['tofu', 250], ['groundchicken', 80, 120], ['scallion', 10], ['oil', 5], ['rice', 0, 150]],
+      season: '辣豆瓣醬 1 大匙、蒜末、花椒粉、玉米粉水',
+      steps: ['豆腐切丁，用加鹽的熱水燙 1 分鐘（比較不易碎）。', '鍋熱放油，炒香蒜末和豆瓣醬，放絞肉炒散。', '加 100ml 水和豆腐，小火煮 3 分鐘。', '用玉米粉水勾芡，撒花椒粉和蔥花。'],
+      done: '絞肉全熟，湯汁濃稠。', tips: ['豆瓣醬很鹹，不用再加鹽。'],
+      keep: '冷藏 2 天。', swap: '板豆腐換嫩豆腐，口感更滑。' },
+    { id: 'oyakodon', n: '日式親子丼', m: '平底鍋', meal: '正餐', pt: 5, ct: 12, taste: 4.5, tn: '甜鹹醬汁加半熟蛋，很療癒。',
+      desc: '雞腿加蛋雙蛋白，增肌日的好選擇。',
+      items: [['thigh', 120, 170], ['egg', 100, 150], ['onion', 60], ['rice', 150, 200]],
+      season: '醬油 1 大匙、味醂 1 大匙、水 80ml、蔥花',
+      steps: ['雞腿肉切小塊，洋蔥切絲。', '小鍋放醬油、味醂和水煮滾，放洋蔥煮 2 分鐘。', '放雞肉煮 5 分鐘到熟。', '蛋稍微打散（不要打太勻），分兩次倒入，蓋鍋 30 秒就關火，倒在飯上。'],
+      done: '雞肉熟透，蛋呈半熟滑嫩。', tips: ['蛋分兩次下，口感更有層次。'],
+      keep: '當天吃。', swap: '白飯換糙米飯，雞腿換雞胸。' },
+    { id: 'bibimbap', n: '韓式拌飯', m: '平底鍋', meal: '正餐', pt: 15, ct: 10, taste: 4.5, tn: '配菜多、口感豐富，拌開超香。',
+      desc: '一碗吃到 4 種蔬菜，泡菜增加風味。',
+      items: [['beef', 100, 150], ['spinach', 60], ['carrot', 40], ['beansprout', 60], ['kimchi', 40], ['friedegg', 50], ['brownrice', 120, 180]],
+      season: '韓式辣醬 1 小匙、香油幾滴、醬油、蒜末',
+      steps: ['牛肉片用醬油和蒜末醃 5 分鐘。', '菠菜、豆芽燙熟；紅蘿蔔切絲炒軟；各拌一點鹽和香油。', '牛肉快炒 2 分鐘。', '碗裡放糙米飯，鋪上所有配菜、泡菜和荷包蛋，加辣醬拌勻。'],
+      done: '牛肉表面變色即可。', tips: ['配菜可以一次做三天份。', '韓式辣醬含糖，1 小匙就夠。'],
+      keep: '配菜冷藏 3 天。', swap: '牛肉換雞胸丁或豆腐。' },
+    { id: 'tomato-egg', n: '番茄炒蛋（減油版）', m: '平底鍋', meal: '正餐', pt: 5, ct: 10, tag: '台式', taste: 4.5, tn: '家常酸甜味，配飯一流。',
+      desc: '加蛋白提高蛋白質，油只用 1 小匙。',
+      items: [['egg', 100, 150], ['eggwhite', 60], ['tomato', 200], ['scallion', 10], ['oil', 5], ['rice', 0, 150]],
+      season: '鹽、少許糖（可省）',
+      steps: ['蛋和蛋白加一點鹽打散；番茄切塊。', '鍋裡放一半的油，倒入蛋液，半熟就先盛起。', '剩下的油炒番茄 2–3 分鐘到出汁，加少許鹽和 2 大匙水。', '蛋倒回鍋拌勻，撒蔥花起鍋。'],
+      done: '番茄出汁變軟，蛋仍然滑嫩。', tips: ['蛋先炒半熟起鍋，最後回鍋才不會老。'],
+      keep: '當天吃。', swap: '加蝦仁變蝦仁番茄炒蛋。' },
+    { id: 'shrimp-egg', n: '蝦仁滑蛋', m: '平底鍋', meal: '正餐', pt: 5, ct: 8, taste: 4.5, tn: '滑嫩鮮甜，很下飯。',
+      desc: '蝦和蛋雙蛋白，10 分鐘上桌。',
+      items: [['shrimp', 100, 150], ['egg', 100, 150], ['scallion', 10], ['oil', 5], ['rice', 0, 150]],
+      season: '鹽、白胡椒',
+      steps: ['蝦仁擦乾，用一點鹽和白胡椒抓一下。', '鍋熱放油，蝦仁煎到轉紅先盛起。', '蛋打散加蔥花和 1 大匙水，轉小火倒入，邊緣凝固時放回蝦仁，輕推到半熟就關火。'],
+      done: '蛋七分熟就關火，用餘溫收尾。', tips: ['蛋液加 1 大匙水會更滑。'],
+      keep: '當天吃。', swap: '蝦仁換雞胸丁。' },
+    { id: 'power-bowl', n: '雞胸藜麥能量碗', m: '平底鍋', meal: '正餐', pt: 10, ct: 15, tag: '熱門', taste: 4, tn: '口感豐富，酪梨讓雞胸不乾。',
+      desc: '訓練日的標準配置，蛋白質、碳水、好油脂都有。',
+      items: [['chicken', 150, 220], ['quinoa', 120, 200], ['broccoli', 100], ['avocado', 50], ['cherrytomato', 50]],
+      season: '鹽、黑胡椒、檸檬',
+      steps: ['雞胸片成 1.5 公分厚，撒鹽和黑胡椒。', '不沾鍋中火，每面煎 4 分鐘，蓋鍋燜 3 分鐘後切片。', '花椰菜燙 2 分鐘。', '碗底放藜麥飯，擺上雞胸、花椰菜、酪梨和小番茄。'],
+      done: '雞胸切面濕潤全白。', tips: ['煎好靜置 3 分鐘再切，肉汁不流失。'],
+      keep: '雞胸和藜麥冷藏 3 天，酪梨要吃再切。', swap: '藜麥換糙米飯或地瓜。', alt: '雞胸改氣炸：200°C 14 分鐘。' },
+    { id: 'vinaigrette-chicken', n: '油醋雞胸糙米飯', m: '平底鍋', meal: '正餐', pt: 5, ct: 15, taste: 4, tn: '油醋醬清爽，雞胸不單調。', src: 'b58280',
+      desc: '一碗最基本的減脂便當，油醋醬讓它好吃很多。',
+      items: [['chicken', 150, 220], ['brownrice', 120, 180], ['bokchoy', 150], ['oil', 5]],
+      season: '油醋醬：橄欖油 1 小匙＋巴薩米克醋 1 大匙、鹽、黑胡椒',
+      steps: ['雞胸煎熟（每面 4 分鐘，蓋鍋燜 3 分鐘）或水煮。', '青江菜燙 2 分鐘。', '橄欖油、巴薩米克醋、鹽和黑胡椒調成油醋醬。', '雞胸切片配糙米飯和青菜，淋上油醋醬。'],
+      done: '雞胸切面全白。', tips: ['醋可以換檸檬汁。'],
+      keep: '冷藏 3 天，醬分開放。', swap: '青江菜換任何燙青菜。' },
+    { id: 'beef-broc', n: '牛肉炒花椰菜', m: '平底鍋', meal: '正餐', pt: 10, ct: 6, taste: 4.5, tn: '牛肉滑嫩，醬香下飯。',
+      desc: '雞胸吃膩時換牛肉，順便補鐵和鋅。',
+      items: [['beef', 120, 170], ['broccoli', 150], ['carrot', 30], ['oil', 5], ['brownrice', 100, 150]],
+      season: '醬油、玉米粉少許、黑胡椒',
+      steps: ['牛肉逆紋切片，用 1 小匙醬油和少許玉米粉抓勻。', '花椰菜燙 1 分鐘撈起。', '大火熱油炒牛肉 1–2 分鐘到變色，放花椰菜和紅蘿蔔拌炒 1 分鐘。', '加少許醬油和黑胡椒起鍋。'],
+      done: '牛肉表面變色即可，不要炒過頭。', tips: ['逆紋切、抓玉米粉，牛肉才嫩。', '鍋要夠熱，快炒才不出水。'],
+      keep: '冷藏 2 天。', swap: '牛肉換豬里肌。' },
+    { id: 'beef-sprout', n: '牛肉炒豆芽', m: '平底鍋', meal: '正餐', pt: 5, ct: 6, taste: 4, tn: '豆芽脆口，牛肉香。', src: 'b55274',
+      desc: '5 分鐘快炒，豆芽便宜又低卡。',
+      items: [['beef', 120, 170], ['beansprout', 150], ['pepper', 50], ['oil', 5], ['fivegrain', 100, 150]],
+      season: '蒜末、辣椒、蠔油 1 小匙、鹽',
+      steps: ['豆芽大火炒 1 分鐘，加少許鹽和辣椒，盛起。', '同鍋炒牛肉到半熟，放甜椒拌炒。', '加蠔油，倒回豆芽拌勻。'],
+      done: '牛肉剛變色、豆芽還脆。', tips: ['豆芽炒太久會出水變軟。'],
+      keep: '當天吃。', swap: '甜椒換糯米椒。' },
+    { id: 'pork-cabbage', n: '豬里肌炒高麗菜', m: '平底鍋', meal: '正餐', pt: 10, ct: 8, tag: '台式', taste: 4, tn: '便當經典，高麗菜清甜。',
+      desc: '家常便當菜，里肌是很瘦的部位。',
+      items: [['pork', 120, 170], ['cabbage', 200], ['carrot', 30], ['oil', 5], ['rice', 120, 180]],
+      season: '醬油、白胡椒、鹽',
+      steps: ['豬里肌切片，用醬油和白胡椒醃 5 分鐘。', '鍋熱放油，炒肉片到變色先盛起。', '同鍋炒高麗菜和紅蘿蔔 2 分鐘，加 2 大匙水。', '肉片倒回拌勻，鹽調味。'],
+      done: '肉片全部變白。', tips: ['里肌片加少許玉米粉抓勻比較嫩。'],
+      keep: '冷藏 3 天。', swap: '高麗菜換空心菜或青江菜。' },
+    { id: 'squid-pepper', n: '透抽炒彩椒', m: '平底鍋', meal: '正餐', pt: 10, ct: 6, taste: 4.5, tn: '透抽脆彈，彩椒甜。', src: 'b55274',
+      desc: '海鮮快炒，脂肪極低。',
+      items: [['squid', 150, 220], ['pepper', 100], ['onion', 50], ['oil', 5], ['fivegrain', 0, 150]],
+      season: '蒜末、蠔油 1 小匙、鹽',
+      steps: ['透抽內側斜切格紋（不切斷），再切小塊。', '鍋熱放油，炒香蒜末、洋蔥和甜椒。', '放透抽大火炒 1–2 分鐘，加蠔油拌勻。'],
+      done: '透抽捲起變白就熟；炒太久會變硬。', tips: ['切花刀比較好入味，口感也更脆。'],
+      keep: '當天吃。', swap: '透抽換蝦仁。' },
+    { id: 'basa-bento', n: '煎巴沙魚雙蛋白便當', m: '平底鍋', meal: '正餐', pt: 10, ct: 15, taste: 4, tn: '剝皮辣椒讓白肉魚很有味道。', src: 'b55274',
+      desc: '魚加蛋兩種蛋白質，搭地瓜和花椰菜。',
+      items: [['basa', 150, 200], ['boiledegg', 100], ['sweetpotato', 120, 180], ['broccoli', 100], ['oil', 3]],
+      season: '剝皮辣椒和少許醬汁、辣椒碎',
+      steps: ['地瓜切塊蒸熟（電鍋外鍋 1.5 杯水）。', '花椰菜燙 2 分鐘，加少許鹽。', '巴沙魚擦乾，少油每面煎 3 分鐘。', '淋上剝皮辣椒和一點醬汁，配水煮蛋。'],
+      done: '魚肉變白、一撥就散。', tips: ['魚放下鍋先不要動，煎定型再翻才不會破。'],
+      keep: '冷藏 2 天。', swap: '巴沙魚換鯛魚或鱈魚。' },
+    { id: 'steak-pumpkin', n: '煎牛排佐南瓜豆腐', m: '平底鍋', meal: '正餐', pt: 10, ct: 15, taste: 5, tn: '牛排香氣搭南瓜甜，很有大餐感。', src: 'b58280',
+      desc: '想吃好一點的日子，減脂期也能吃牛排。',
+      items: [['steak', 150, 220], ['pumpkin', 150], ['tofu', 100], ['broccoli', 100], ['oil', 5]],
+      season: '鹽、黑胡椒、蒜片',
+      steps: ['牛排退冰到室溫、擦乾，兩面撒鹽和黑胡椒。南瓜切塊用電鍋蒸（外鍋 1 杯水）。', '鍋燒到冒煙放油，牛排每面煎 2–3 分鐘（約 2 公分厚、五分熟）。', '牛排靜置 5 分鐘；用剩下的油把豆腐煎到兩面金黃。', '花椰菜燙 2 分鐘，全部盛盤。'],
+      done: '手指按壓：像按臉頰是三分熟，像按下巴是五分熟。', tips: ['靜置 5 分鐘再切，肉汁才不會流出來。'],
+      keep: '當天吃。', swap: '牛排換鮭魚。', alt: '懶人版：牛排和南瓜一起進烤箱 220°C 12–15 分鐘。' },
+    { id: 'oat-pancake', n: '香蕉燕麥鬆餅', m: '平底鍋', meal: '早餐', pt: 5, ct: 10, tag: '熱門', taste: 4, tn: '香蕉自然甜，像健康版鬆餅。',
+      desc: '不用麵粉和糖，甜味來自香蕉。',
+      items: [['oats', 40, 60], ['banana', 60], ['egg', 50], ['eggwhite', 60], ['blueberry', 50], ['yogurt', 0, 150]],
+      season: '肉桂粉（可省）',
+      steps: ['燕麥、香蕉、蛋和蛋白用果汁機打成麵糊（或香蕉壓泥後拌勻）。', '不沾鍋小火，每次倒 3 大匙麵糊，冒泡後翻面再煎 1 分鐘。', '放上藍莓。增肌份配一碗希臘優格。'],
+      done: '表面冒泡、邊緣乾了再翻。', tips: ['香蕉越熟越甜。', '加一匙乳清能提高蛋白質。'],
+      keep: '冷凍 2 週，烤箱或氣炸回烤。', swap: '藍莓換草莓或奇異果。' },
+    { id: 'eggwhite-omelette', n: '蔬菜蛋白蛋捲', m: '平底鍋', meal: '早餐', pt: 5, ct: 8, taste: 3.5, tn: '口感清爽，加起司會更香。',
+      desc: '用蛋白提高蛋白質、降低脂肪的早餐。',
+      items: [['egg', 50], ['eggwhite', 120], ['spinach', 40], ['mushroom', 40], ['cheese', 0, 1], ['toast', 0, 2]],
+      season: '鹽、黑胡椒',
+      steps: ['菠菜和菇切碎，少油炒 1 分鐘盛起。', '蛋和蛋白加鹽打勻，倒入不沾鍋，小火煎到底部凝固。', '鋪上蔬菜（增肌份加起司），對折捲起。'],
+      done: '表面不再流動。', tips: ['火要小，蛋白才不會起泡變硬。'],
+      keep: '當天吃。', swap: '菇換番茄丁或甜椒。' },
+
+    // ---------------- 電鍋 ----------------
+    { id: 'rc-tofu-shrimp', n: '電鍋鮮蝦蔬菜嫩豆腐煲', m: '電鍋', meal: '正餐', pt: 10, ct: 20, tag: '熱門', taste: 4.5, tn: '湯汁鮮甜，豆腐滑嫩。', src: 'angela',
+      desc: '只洗一個碗；原作者標示不到 500 大卡、蛋白質約 45g。',
+      items: [['broccoli', 100], ['cabbage', 100], ['mushroom', 60], ['silken', 150], ['shrimp', 150, 200], ['egg', 100, 150]],
+      season: '醬油 15ml、黑胡椒、蔥花或辣椒末',
+      steps: ['耐熱容器底部依序放蔬菜、嫩豆腐和蝦仁（冷凍蝦可直接放）。', '打入雞蛋，淋醬油、撒黑胡椒。', '電鍋外鍋放約 6 分滿量米杯的水，蒸到開關跳起，再燜 5 分鐘。', '撒蔥花或辣椒末。'],
+      done: '蝦變紅、蛋凝固。', tips: ['冷凍花椰菜和冷凍蝦就能做，下班也不用備料。'],
+      keep: '當天吃。', swap: '蝦仁換雞胸片（先用醬油醃 10 分鐘）。', alt: '微波爐也可以：蓋保鮮膜，600W 約 8–10 分鐘。' },
+    { id: 'rc-thigh-kingoyster', n: '電鍋雞腿杏鮑菇高麗菜', m: '電鍋', meal: '正餐', pt: 10, ct: 20, taste: 4.5, tn: '雞腿汁滲進高麗菜，很鮮甜。', src: 'digby',
+      desc: '雞腿比雞胸多一點油脂，比較有飽足感；杏鮑菇和高麗菜增加份量又不增加熱量。',
+      items: [['thigh', 150, 200], ['kingoyster', 100], ['cabbage', 150], ['brownrice', 0, 150]],
+      season: '醬油、蒜末、黑胡椒',
+      steps: ['雞腿肉切塊，用醬油、蒜末、黑胡椒醃 10 分鐘。', '高麗菜鋪底，放杏鮑菇和雞腿肉，淋上醃汁。', '外鍋 1 杯水，蒸到開關跳起，燜 5 分鐘。'],
+      done: '雞腿切開沒有血水。', tips: ['高麗菜鋪底可以吸雞汁。'],
+      keep: '冷藏 3 天。', swap: '杏鮑菇換鴻喜菇。' },
+    { id: 'rc-kimchi-pork', n: '電鍋泡菜豬里肌蒸菇', m: '電鍋', meal: '正餐', pt: 10, ct: 20, taste: 4.5, tn: '泡菜酸辣，免調味就夠味。', src: 'penguin',
+      desc: '照 Threads 的「電鍋減脂餐萬能公式」：一種肉＋菇或瓜類＋一種醬，蒸就好。',
+      items: [['pork', 120, 170], ['kimchi', 60], ['enoki', 80], ['babycorn', 50], ['zucchini', 80], ['fivegrain', 0, 150]],
+      season: '泡菜本身的醬汁；也可換燒肉醬或醬油加蒜末',
+      steps: ['豬里肌片用少許醬油和玉米粉抓勻（比較不柴）。', '碗底放金針菇、玉米筍和櫛瓜，鋪上肉片和泡菜。', '外鍋 1 杯水，蒸到開關跳起。', '澱粉另外搭，例如五穀飯或地瓜。'],
+      done: '肉片全部變白。', tips: ['不建議放葉菜，蒸久會變黃又影響調味。'],
+      keep: '冷藏 2 天。', swap: '豬里肌換雞腿肉或雞胸。' },
+    { id: 'rc-pumpkin', n: '電鍋南瓜雞胸秋葵', m: '電鍋', meal: '正餐', pt: 10, ct: 25, tag: '備餐', taste: 4, tn: '南瓜鬆甜，雞胸清爽。',
+      desc: '南瓜當主食，纖維和飽足感都夠。',
+      items: [['chicken', 150, 220], ['pumpkin', 150, 200], ['okra', 80]],
+      season: '鹽、黑胡椒、醬油',
+      steps: ['雞胸抹鹽和黑胡椒靜置 10 分鐘；南瓜帶皮切塊。', '南瓜和雞胸放進內鍋，外鍋 1 杯水，蒸到開關跳起。', '放入秋葵，外鍋再加 ¼ 杯水蒸一次。', '雞胸切片，淋一點醬油。'],
+      done: '雞胸切開全白，南瓜能輕鬆插入。', tips: ['南瓜皮可以吃，纖維更多。'],
+      keep: '冷藏 3 天。', swap: '秋葵換花椰菜。' },
+    { id: 'rc-onepot', n: '電鍋雞胸地瓜一鍋到底', m: '電鍋', meal: '正餐', pt: 10, ct: 30, tag: '備餐', taste: 3.5, tn: '清淡健康，要靠醬料提味。',
+      desc: '放進去按下去就好，最適合懶人備餐。',
+      items: [['chicken', 150, 220], ['sweetpotato', 150, 200], ['broccoli', 100]],
+      season: '鹽、黑胡椒、醬油或檸檬',
+      steps: ['雞胸用鹽和黑胡椒抹勻，地瓜切塊。', '地瓜、雞胸放進內鍋或蒸盤，外鍋放 1.5 杯水。', '開關跳起後放入花椰菜，外鍋再加 ¼ 杯水蒸一次。', '雞胸切片，淋一點醬油或檸檬汁。'],
+      done: '雞胸切開全白，地瓜鬆軟。', tips: ['雞胸先抹鹽靜置 10 分鐘比較入味。', '可以淋油醋醬或和風醬。'],
+      keep: '冷藏 3 天。', swap: '地瓜換南瓜。' },
+    { id: 'steam-fish', n: '電鍋清蒸鱸魚', m: '電鍋', meal: '正餐', pt: 5, ct: 15, taste: 4, tn: '鮮嫩清爽，吃得到魚的甜味。',
+      desc: '不用顧火，脂肪極低。',
+      items: [['seabass', 150, 220], ['scallion', 15], ['rice', 0, 150]],
+      season: '薑絲、醬油 1 小匙、米酒少許',
+      steps: ['盤底墊蔥段，放上魚片，鋪薑絲，淋米酒和醬油。', '電鍋外鍋放 1 杯水，蒸到開關跳起。', '撒上蔥絲，淋一點熱水增香。'],
+      done: '魚肉變白，筷子插入最厚處能輕鬆穿透。', tips: ['盤底墊蔥段，魚不黏盤也更香。'],
+      keep: '當天吃。', swap: '鱸魚換鯛魚或鱈魚。' },
+    { id: 'chawanmushi', n: '電鍋蝦仁蒸蛋', m: '電鍋', meal: '早餐', pt: 5, ct: 15, taste: 4, tn: '滑嫩像布丁，鹹香。',
+      desc: '滑嫩好入口，早餐或宵夜都適合。',
+      items: [['egg', 100, 150], ['shrimp', 60, 100], ['mushroom', 30]],
+      season: '鹽、醬油少許',
+      steps: ['蛋打散，加 1.5 倍蛋液量的水和少許鹽，過篩。', '碗裡放蝦仁和菇，倒入蛋液，蓋上盤子。', '外鍋放 1 杯水，蒸到開關跳起後燜 5 分鐘。'],
+      done: '搖晃時中心不晃動。', tips: ['蛋液過篩、蓋盤子，表面才平滑沒有孔洞。'],
+      keep: '當天吃。', swap: '蝦仁換雞胸丁或蟹肉棒。' },
+
+    // ---------------- 水煮 ----------------
+    { id: 'soba-chicken', n: '涼拌手撕雞蕎麥麵', m: '水煮', meal: '正餐', pt: 10, ct: 15, taste: 4.5, tn: '酸辣開胃，夏天最想吃。', src: 'b58280',
+      desc: '烏醋辣油醬，比一般涼麵清爽很多。',
+      items: [['chicken', 120, 170], ['soba', 150, 220], ['cucumber', 80], ['carrot', 30], ['oil', 3]],
+      season: '醬油 1 大匙、烏醋 1 大匙、蒜末、乾辣椒或辣油少許',
+      steps: ['雞胸放進冷水，煮滾後轉小火 5 分鐘，關火蓋鍋燜 10 分鐘，放涼撕成絲。', '蕎麥麵照包裝煮熟，沖冷水瀝乾。', '小黃瓜、紅蘿蔔切絲。', '醬油、烏醋、蒜末、辣油和橄欖油調成醬，全部拌勻。'],
+      done: '雞胸撕開全白多汁。', tips: ['冷水下鍋再燜熟，雞胸最嫩。', '沖冷水讓蕎麥麵更 Q。'],
+      keep: '雞絲冷藏 3 天，醬汁分開放。', swap: '雞胸換蝦仁。' },
+    { id: 'shrimp-soba', n: '蝦仁蕎麥拌麵佐煎蛋', m: '水煮', meal: '正餐', pt: 5, ct: 10, taste: 4, tn: '醬汁酸辣，蛋黃拌麵很香。', src: 'b58280',
+      desc: '一鍋水把麵、蝦、青菜依序燙熟。',
+      items: [['shrimp', 100, 150], ['soba', 150, 200], ['bokchoy', 100], ['friedegg', 50]],
+      season: '醬油、醋、辣椒油',
+      steps: ['一鍋水煮滾，依序燙蕎麥麵、青江菜和蝦仁。', '另外煎一顆荷包蛋。', '醬油、醋和辣椒油調成醬，全部拌勻，放上荷包蛋。'],
+      done: '蝦仁轉紅捲起。', tips: ['同一鍋水依序燙，省時間也少洗鍋。'],
+      keep: '當天吃。', swap: '蕎麥麵換蒟蒻麵（減脂日）。' },
+    { id: 'tomato-ball-soup', n: '番茄雞肉丸豆腐湯', m: '水煮', meal: '正餐', pt: 10, ct: 15, taste: 4, tn: '番茄湯頭酸甜暖胃。', src: 'b58280',
+      desc: '一鍋有肉有菜，晚餐吃這個很輕盈。',
+      items: [['tomato', 200], ['chickenball', 100, 150], ['beansprout', 80], ['silken', 150], ['crabstick', 0, 40]],
+      season: '鹽或醬油、白胡椒',
+      steps: ['番茄切塊，和雞肉丸一起放進 600ml 水煮滾。', '轉小火煮 5 分鐘，讓番茄出味。', '加豆芽和豆腐煮 3 分鐘。', '鹽或醬油調味。'],
+      done: '雞肉丸浮起、番茄軟爛。', tips: ['番茄先炒一下再加水，湯頭會更濃。'],
+      keep: '冷藏 2 天。', swap: '市售雞肉丸換自己做的氣炸雞胸肉丸。' },
+    { id: 'soymilk-hotpot', n: '豆漿雞肉小火鍋', m: '水煮', meal: '正餐', pt: 10, ct: 15, taste: 4.5, tn: '豆漿湯底濃郁，冬天很適合。',
+      desc: '豆漿湯底本身就有蛋白質。',
+      items: [['soymilk', 400], ['chicken', 150, 200], ['tofu', 150], ['cabbage', 150], ['enoki', 80], ['babycorn', 40]],
+      season: '鹽、白胡椒；沾醬：醬油加蒜末',
+      steps: ['無糖豆漿加 200ml 水，小火煮到冒小泡（不要大滾）。', '先放高麗菜和玉米筍煮 3 分鐘。', '放雞胸片、豆腐和金針菇煮 5 分鐘。', '加少許鹽和白胡椒。'],
+      done: '雞胸片全白。', tips: ['豆漿容易溢鍋和燒焦，全程保持小火。'],
+      keep: '當天吃。', swap: '雞胸換豬里肌片或蝦。' },
+    { id: 'oat-porridge', n: '雞肉燕麥鹹粥', m: '水煮', meal: '早餐', pt: 5, ct: 10, taste: 4, tn: '像廣式粥，暖胃好消化。',
+      desc: '燕麥煮成鹹粥，比白粥更有飽足感。',
+      items: [['oats', 40, 60], ['chickentender', 100, 150], ['egg', 50], ['spinach', 50], ['mushroom', 40]],
+      season: '鹽、白胡椒、蔥花、薑絲',
+      steps: ['水 400ml 煮滾，放雞里肌絲和菇煮 3 分鐘。', '放燕麥煮 3–4 分鐘到濃稠。', '打入蛋攪散，加菠菜煮 1 分鐘，鹽和白胡椒調味。'],
+      done: '燕麥軟爛濃稠。', tips: ['用大燕麥片口感比較好，即食燕麥會太糊。'],
+      keep: '當天吃。', swap: '雞里肌換鮪魚罐頭（最後加）。' },
+    { id: 'tofu-soup', n: '豆腐菇菇蛋花湯', m: '水煮', meal: '正餐', pt: 5, ct: 10, taste: 4, tn: '暖胃清甜，熱量低。',
+      desc: '晚上嘴饞時的好選擇。',
+      items: [['silken', 200], ['mushroom', 100], ['spinach', 80], ['egg', 50, 100]],
+      season: '鹽、白胡椒、香油幾滴',
+      steps: ['水 500ml 煮滾，放入菇類煮 3 分鐘。', '放入豆腐和菠菜再煮 2 分鐘。', '蛋打散，轉小火慢慢倒入成蛋花，加鹽和白胡椒。'],
+      done: '蛋花凝固成片。', tips: ['蛋液沿著筷子細細倒入，蛋花才漂亮。'],
+      keep: '冷藏 1 天。', swap: '菠菜換青江菜。' },
+    { id: 'konjac-soup', n: '雞胸蒟蒻麵湯', m: '水煮', meal: '正餐', pt: 5, ct: 10, taste: 3.5, tn: '有湯麵的滿足感，但蒟蒻口感較 Q。',
+      desc: '用蒟蒻麵代替麵條，吃得到湯麵又不怕熱量。',
+      items: [['chicken', 120, 170], ['konjac', 200], ['cabbage', 100], ['mushroom', 50], ['egg', 50]],
+      season: '鹽、白胡椒、蔥花',
+      steps: ['水 600ml 煮滾，放入雞胸片煮 5 分鐘。', '加入高麗菜、菇類和蒟蒻麵煮 3 分鐘。', '打入一顆蛋煮到喜歡的熟度，鹽和白胡椒調味。'],
+      done: '雞胸片全白。', tips: ['蒟蒻麵先乾炒 1 分鐘可以去鹼味。', '湯加一點柴魚或昆布更鮮。'],
+      keep: '當天吃。', swap: '蒟蒻麵換蕎麥麵（增肌期）。' },
+
+    // ---------------- 免開火 ----------------
+    { id: 'mounjaro', n: '天然猛健樂', m: '免開火', meal: '正餐', pt: 5, ct: 0, tag: '熱門', taste: 3.5, tn: '清爽有口感，吃久會單調，可以換醬。',
+      desc: '網路流行吃法，高蛋白、低熱量、吃得飽。名字借自藥物，食物本身沒有藥效。',
+      items: [['cucumber', 150], ['tuna', 80, 160], ['boiledegg', 100], ['corn', 100], ['nori', 3]],
+      season: '黑胡椒、少許醬油或檸檬汁',
+      steps: ['小黃瓜拍碎切段，水煮蛋切半。', '鮪魚罐頭瀝乾。玉米用超商熟玉米或玉米粒罐頭（瀝乾）。', '全部放進碗裡，加黑胡椒和少許醬油或檸檬汁拌勻。', '用海苔包著吃，或剪碎撒上。'],
+      done: '', tips: ['加一點芥末醬油會好吃很多。'],
+      keep: '鮪魚開罐當天吃完。', swap: '鮪魚換舒肥雞胸。' },
+    { id: 'tuna-avo', n: '鮪魚酪梨蛋沙拉', m: '免開火', meal: '正餐', pt: 10, ct: 0, taste: 4, tn: '鮪魚醬綿密，酪梨增加滑順。',
+      desc: '用優格取代美乃滋，增肌份夾 2 片吐司。',
+      items: [['tuna', 80], ['avocado', 50], ['boiledegg', 50], ['lettuce', 80], ['cherrytomato', 60], ['yogurt', 30], ['toast', 0, 2]],
+      season: '黑胡椒、鹽、檸檬汁',
+      steps: ['鮪魚瀝乾，和優格、黑胡椒拌成鮪魚醬。', '酪梨、水煮蛋切塊，生菜撕小片。', '全部放碗裡，鮪魚醬放上面拌著吃。'],
+      done: '', tips: ['酪梨擠點檸檬汁比較不會變黑。'],
+      keep: '酪梨要吃再切。', swap: '優格換一點點美乃滋（熱量會增加）。' },
+    { id: 'chickpea-tuna', n: '鷹嘴豆鮪魚沙拉', m: '免開火', meal: '正餐', pt: 10, ct: 0, taste: 4, tn: '地中海風味，口感豐富。',
+      desc: '鷹嘴豆同時有蛋白質和纖維，飽足感很高。',
+      items: [['chickpea', 100], ['tuna', 80], ['cucumber', 80], ['cherrytomato', 60], ['onion', 20], ['oil', 5]],
+      season: '檸檬汁、鹽、黑胡椒、香菜（可省）',
+      steps: ['鷹嘴豆罐頭沖水瀝乾，鮪魚瀝乾。', '小黃瓜、小番茄、洋蔥切丁。', '全部加橄欖油、檸檬汁、鹽和黑胡椒拌勻。'],
+      done: '', tips: ['洋蔥切丁泡冰水 5 分鐘可以去辛辣。'],
+      keep: '冷藏 2 天（便當很適合）。', swap: '鮪魚換舒肥雞胸丁。' },
+    { id: 'yogurt-bowl', n: '優格莓果碗', m: '免開火', meal: '早餐', pt: 5, ct: 0, taste: 4.5, tn: '酸甜清爽，堅果增加口感。',
+      desc: '早餐或訓練後點心，蛋白質和纖維都有。',
+      items: [['yogurt', 200], ['blueberry', 80], ['kiwi', 80], ['oats', 30], ['almond', 15]],
+      season: '肉桂粉（可省）',
+      steps: ['碗底放希臘優格。', '鋪上藍莓和切塊的奇異果。', '撒上燕麥和杏仁。'],
+      done: '', tips: ['想更飽，加一匙乳清拌進優格。'],
+      keep: '燕麥要吃再撒才會脆。', swap: '水果換任何當季水果。' },
+    { id: 'cottage-fruit', n: '茅屋起司鳳梨杯', m: '免開火', meal: '點心', pt: 3, ct: 0, taste: 4, tn: '鹹甜交錯，像起司蛋糕的清爽版。',
+      desc: '高蛋白點心，嘴饞時取代甜點。',
+      items: [['cottage', 150], ['pineapple', 80], ['blueberry', 40], ['walnut', 10]],
+      season: '',
+      steps: ['杯底放茅屋起司。', '放上鳳梨丁和藍莓。', '撒碎核桃。'],
+      done: '', tips: ['茅屋起司在大型超市或 Costco 買得到。'],
+      keep: '當天吃。', swap: '茅屋起司換希臘優格。' },
+    { id: 'overnight-oats', n: '高蛋白隔夜燕麥', m: '免開火', meal: '早餐', pt: 5, ct: 0, tag: '備餐', taste: 4, tn: '口感綿密，像燕麥布丁。',
+      desc: '前一晚 3 分鐘弄好，早上直接吃。',
+      items: [['oats', 40, 60], ['milk', 200], ['whey', 1], ['chia', 5], ['blueberry', 50]],
+      season: '',
+      steps: ['燕麥、牛奶、乳清和奇亞籽放進罐子攪勻。', '蓋上蓋子冷藏一晚（至少 4 小時）。', '早上加藍莓直接吃。'],
+      done: '', tips: ['奇亞籽會吸水，牛奶可以多加一點。'],
+      keep: '冷藏 2 天。', swap: '牛奶換無糖豆漿。' },
+    { id: 'post-shake', n: '訓練後香蕉奶昔', m: '免開火', meal: '點心', pt: 3, ct: 0, tag: '我的常吃', taste: 4, tn: '香蕉牛奶味，很好入口。',
+      desc: '乳清加香蕉補蛋白質和碳水，水肌酸可以一起加。',
+      items: [['whey', 1], ['banana', 100], ['milk', 240]],
+      season: '',
+      steps: ['乳清、香蕉和牛奶放進搖搖杯或果汁機（香蕉先壓碎）。', '加入一份水肌酸一起搖勻。'],
+      done: '', tips: ['牛奶換無糖豆漿，或用水沖可以降低熱量。'],
+      keep: '現搖現喝。', swap: '香蕉換燕麥 30g。' },
+
+    // ---------------- 外食 ----------------
+    { id: 'subway', n: 'Snow 的 Subway 雞肉捲', m: '外食', meal: '正餐', pt: 0, ct: 0, tag: '我的常吃', taste: 4, tn: '方便、份量大、蛋白質夠。',
+      desc: '雙倍肉、加蛋、不加起司、不加醬。營養為估算值。',
+      items: [['subway', 1], ['whey', 0, 1]],
+      season: '',
+      steps: ['點雞肉捲：雙倍肉、加蛋、不加起司、不加醬。', '蔬菜全加，不影響熱量還增加纖維。', '增肌份搭一杯乳清。'],
+      done: '', tips: ['想要醬，黃芥末熱量最低。'], keep: '', swap: '' },
+    { id: 'cvs-711', n: '7-11 減脂早餐', m: '外食', meal: '早餐', pt: 0, ct: 0, tag: '超商', taste: 3.5, tn: '組合普通但穩定。', src: 'tvbs',
+      desc: '營養師推薦的超商組合。',
+      items: [['boiledegg', 100], ['soymilk', 380], ['sweetpotato', 110], ['lettuce', 100]],
+      season: '',
+      steps: ['茶葉蛋 2 顆、無糖豆漿 1 瓶（約 380ml）、烤地瓜 1 條、生菜沙拉 1 盒。'],
+      done: '', tips: ['沙拉醬用一半或不加。'], keep: '', swap: '豆漿換低脂鮮奶。' },
+    { id: 'cvs-fm', n: '全家輕食早餐', m: '外食', meal: '早餐', pt: 0, ct: 0, tag: '超商', taste: 3.5, tn: '吐司版，口感比較像早餐。', src: 'tvbs',
+      desc: '吐司版本，飽足感也夠。',
+      items: [['boiledegg', 50], ['soymilk', 380], ['toast', 2], ['lettuce', 100]],
+      season: '',
+      steps: ['茶葉蛋 1 顆、無糖豆漿 1 瓶、全麥吐司 2 片、生菜沙拉 1 盒。'],
+      done: '', tips: ['想再多蛋白質，多一顆茶葉蛋。'], keep: '', swap: '' },
+    { id: 'cvs-lunch', n: '超商高蛋白午餐', m: '外食', meal: '正餐', pt: 0, ct: 0, tag: '超商', taste: 3.5, tn: '方便但口味單調。',
+      desc: '舒肥雞胸當主角，增肌份雞胸和蛋加倍。',
+      items: [['sousvide', 100, 200], ['sweetpotato', 110, 200], ['lettuce', 100], ['boiledegg', 50, 100]],
+      season: '',
+      steps: ['舒肥雞胸 1 包、烤地瓜 1 條、生菜沙拉 1 盒、茶葉蛋 1 顆。', '增肌份：舒肥雞胸 2 包、茶葉蛋 2 顆、地瓜換大條。'],
+      done: '', tips: ['舒肥雞胸選原味或黑胡椒，避開照燒（含糖較多）。'], keep: '', swap: '' },
+    { id: 'cvs-oden', n: '超商關東煮減脂組合', m: '外食', meal: '正餐', pt: 0, ct: 0, tag: '超商', taste: 4, tn: '熱熱的很療癒，選對就不怕胖。',
+      desc: '冬天超商的好選擇，重點是避開加工品。',
+      items: [['radish', 100], ['corn', 100], ['kingoyster', 80], ['boiledegg', 50], ['chickenball', 60]],
+      season: '',
+      steps: ['選白蘿蔔、玉米、杏鮑菇、雞蛋和雞肉丸。', '避開魚板、甜不辣、米血等加工品。', '湯少喝，醬料用一點就好。'],
+      done: '', tips: ['加工品澱粉和鈉都偏高。'], keep: '', swap: '' },
+    { id: 'luwei', n: '滷味減脂點法', m: '外食', meal: '正餐', pt: 0, ct: 0, tag: '台式', taste: 4, tn: '想吃重口味時的安全選擇。',
+      desc: '滷味也能減脂，關鍵在選料和少滷汁。',
+      items: [['dougan', 80], ['kelp', 80], ['broccoli', 100], ['enoki', 80], ['boiledegg', 50], ['glassnoodle', 30]],
+      season: '',
+      steps: ['點豆干、海帶、花椰菜、金針菇和滷蛋，主食選冬粉。', '請老闆不要加滷汁、少辣油、不要加酸菜。', '避開百頁豆腐、甜不辣、米血。'],
+      done: '', tips: ['百頁豆腐看起來健康，其實油脂很高。'], keep: '', swap: '' },
+    { id: 'cafeteria', n: '自助餐減脂夾法', m: '外食', meal: '正餐', pt: 0, ct: 0, tag: '台式', taste: 4, tn: '選擇多，吃得像家常菜。',
+      desc: '上班族午餐最常見，夾對就是減脂便當。',
+      items: [['thigh', 120], ['cabbage', 100], ['bokchoy', 100], ['greenbean', 80], ['rice', 100]],
+      season: '',
+      steps: ['主菜選去皮滷雞腿、滷雞胸或清蒸魚，避開炸物和勾芡。', '夾 3 樣青菜並瀝掉湯汁，至少一樣深綠色。', '飯半碗，或換五穀飯。'],
+      done: '', tips: ['青菜底部的油最多，夾上面的。'], keep: '', swap: '' }
+  ];
+
+  var FM = {};
+  function indexFoods(list) { list.forEach(function (f) { FM[f.id] = f; }); }
+  indexFoods(F);
+  var MINOR = { oil: 1, scallion: 1, crumbs: 1, starchpowder: 1, chia: 1, nori: 1 };
+  var RM = {};
+  function indexRecipes() { RM = {}; allRecipes().forEach(function (r) { RM[r.id] = r; }); }
+  var FEED = [];
+  function allRecipes() { return FEED.concat(R); }
+
+  // ---------------------------------------------------------------- helpers
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function r1(x) { return Math.round(x * 10) / 10; }
+  function short(f) { return f.s || f.n; }
+  function cn(f) { return f.n.replace(/（.*?）/g, ''); }
+  function list(arr) { return arr.map(function (x) { return cn(x.f); }).join('、'); }
+  function mac(f, q) { var m = f.pu ? q : q / 100; return { k: f.k * m, p: f.p * m, f: f.f * m, c: f.c * m }; }
+  function totals(items) {
+    var t = { k: 0, p: 0, f: 0, c: 0 };
+    items.forEach(function (it) { var f = FM[it.id]; if (!f || !it.q) return; var m = mac(f, it.q); t.k += m.k; t.p += m.p; t.f += m.f; t.c += m.c; });
+    return t;
+  }
+  function amount(f, q) {
+    if (f.lab) return f.lab;
+    if (f.pu) return q + ' ' + f.un;
+    if (f.u) return r1(q / f.u) + ' ' + f.un + '（' + q + 'g）';
+    return q + (f.ml ? 'ml' : 'g');
+  }
+  function stepOf(f) { return f.pu ? 1 : (f.st || 10); }
+  function recItems(r, big) {
+    return r.items.map(function (a) { return { id: a[0], q: big && a[2] != null ? a[2] : a[1] }; }).filter(function (x) { return x.q > 0 && FM[x.id]; });
+  }
+  function hasBig(r) { return r.items.some(function (a) { return a[2] != null && a[2] !== a[1]; }); }
+  function comboKey(items) {
+    var s = items.slice().sort(function (a, b) { return a.id < b.id ? -1 : 1; }).map(function (i) { return i.id + ':' + i.q; }).join('|');
+    var h = 5381;
+    for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return 'c-' + h.toString(36) + s.length.toString(36);
+  }
+
+  // ---------------------------------------------------------------- health score
+  function health(items) {
+    var t = totals(items);
+    if (!t.k) return { s: 0, why: [] };
+    var s = 1, why = [];
+    var pr = t.p * 4 / t.k, fr = t.f * 9 / t.k;
+    if (pr >= 0.35) { s += 1.5; why.push('蛋白質佔熱量 ' + Math.round(pr * 100) + '%，很高'); }
+    else if (pr >= 0.25) { s += 1; why.push('蛋白質佔熱量 ' + Math.round(pr * 100) + '%'); }
+    else if (pr >= 0.15) { s += 0.5; why.push('蛋白質偏少（' + Math.round(pr * 100) + '%）'); }
+    else why.push('蛋白質很少');
+    var veg = 0;
+    items.forEach(function (it) { var f = FM[it.id]; if (f && (f.cat === 'veg' || f.cat === 'mush') && !f.pu && f.id !== 'nori' && f.id !== 'scallion') veg += it.q; });
+    if (veg >= 150) { s += 1; why.push('蔬菜 ' + veg + 'g'); }
+    else if (veg >= 80) { s += 0.5; why.push('蔬菜 ' + veg + 'g，可以再多'); }
+    else why.push('蔬菜不足');
+    var good = items.some(function (it) { var f = FM[it.id]; return f && (f.grp === 'oilyfish' || f.id === 'avocado' || f.id === 'walnut' || f.id === 'almond'); });
+    var lift = good ? 0.12 : 0;
+    if (fr <= 0.3 + lift) { s += 1; why.push(good ? '脂肪多來自魚油或堅果等好油脂' : '脂肪比例低'); }
+    else if (fr <= 0.4 + lift) { s += 0.5; why.push('脂肪比例適中'); }
+    else why.push('脂肪比例偏高（' + Math.round(fr * 100) + '%）');
+    var refined = items.some(function (it) { var f = FM[it.id]; return f && f.refined; });
+    if (!refined) s += 0.5; else why.push('含精緻澱粉');
+    s = Math.max(1, Math.min(5, Math.round(s * 2) / 2));
+    return { s: s, why: why };
+  }
+  function scoreTxt(n) { return n ? (n % 1 ? n.toFixed(1) : String(n)) : '–'; }
+
+  // ---------------------------------------------------------------- pairing
+  var COOC = null;
+  function buildCooc() {
+    COOC = {};
+    allRecipes().forEach(function (r) {
+      var ids = recItems(r, true).map(function (x) { return x.id; }).filter(function (id) { return !MINOR[id] && FM[id] && FM[id].cat !== 'hide'; });
+      ids.forEach(function (a) { ids.forEach(function (b) { if (a !== b) { COOC[a] = COOC[a] || {}; COOC[a][b] = (COOC[a][b] || 0) + 1; } }); });
+    });
+  }
+  function catGroup(f) {
+    if (!f) return '';
+    if (f.cat === 'protein' || f.cat === 'sea' || f.cat === 'egg' || f.id === 'whey' || f.id === 'subway') return 'P';
+    if (f.cat === 'starch') return 'C';
+    if (f.cat === 'veg' || f.cat === 'mush') return 'V';
+    return f.cat;
+  }
+  function pairsFor(id) {
+    if (!COOC) buildCooc();
+    var have = {}, groups = {};
+    sel.forEach(function (s) { have[s.id] = 1; groups[catGroup(FM[s.id])] = 1; });
+    var cand = {};
+    function add(pid, score, why) {
+      var f = FM[pid];
+      if (!f || have[pid] || pid === id || MINOR[pid] || f.cat === 'hide' || f.cat === 'x') return;
+      var c = cand[pid] || (cand[pid] = { id: pid, s: 0, why: '' });
+      c.s += score; if (!c.why && why) c.why = why;
+    }
+    (PAIR[id] || []).forEach(function (p, i) { add(p[0], 12 - i, p[1]); });
+    var co = COOC[id] || {};
+    Object.keys(co).forEach(function (pid) { add(pid, co[pid] * 2, co[pid] + ' 道食譜一起用'); });
+    var need = [['P', '補蛋白質'], ['C', '補碳水'], ['V', '補纖維']].filter(function (n) { return !groups[n[0]]; });
+    Object.keys(cand).forEach(function (pid) {
+      var g = catGroup(FM[pid]);
+      need.forEach(function (n) { if (n[0] === g) { cand[pid].s += 3; if (!cand[pid].why) cand[pid].why = n[1]; } });
+    });
+    return Object.keys(cand).map(function (k) { return cand[k]; }).sort(function (a, b) { return b.s - a.s; }).slice(0, 6);
+  }
+
+  // ---------------------------------------------------------------- generator
+  var GEN = [
+    { id: 'auto', n: '自動' }, { id: 'air', n: '氣炸鍋' }, { id: 'oven', n: '烤箱' }, { id: 'pan', n: '平底鍋' },
+    { id: 'steam', n: '電鍋' }, { id: 'soup', n: '水煮/湯' }, { id: 'cold', n: '免開火' }
+  ];
+  function timeline(arr, tf, prefix, verb) {
+    var T = 0;
+    arr.forEach(function (x) { T = Math.max(T, tf(x)); });
+    var groups = {};
+    arr.forEach(function (x) { var s = T - tf(x); (groups[s] = groups[s] || []).push(x); });
+    var starts = Object.keys(groups).map(Number).sort(function (a, b) { return a - b; });
+    if (starts.length === 1) return prefix + verb + ' ' + T + ' 分鐘。';
+    var s = prefix + '共 ' + T + ' 分鐘：一開始放' + list(groups[starts[0]]);
+    starts.slice(1).forEach(function (st) { s += '，第 ' + st + ' 分鐘放' + list(groups[st]); });
+    return s + '。';
+  }
+  function fallback(x) {
+    var f = x.f;
+    if (f.other) return cn(f) + f.other;
+    if (f.pan) return cn(f) + '用平底鍋' + f.pan;
+    if (f.boil) return cn(f) + '水煮 ' + f.boil + ' 分鐘';
+    return cn(f) + '煮熟';
+  }
+  function generate(selItems, mode) {
+    var L = selItems.map(function (it) { return { f: FM[it.id], q: it.q }; }).filter(function (x) { return x.f; });
+    var cook = L.filter(function (x) { return !x.f.ready && !(x.f.raw && !x.f.af && !x.f.boil); });
+    var rawOnly = L.filter(function (x) { return x.f.raw && !x.f.af && !x.f.boil && !x.f.ready; });
+    var ready = L.filter(function (x) { return x.f.ready; });
+    var oil = L.some(function (x) { return x.f.id === 'oil'; });
+    var m = mode;
+    if (m === 'auto') {
+      var needs = L.filter(function (x) { return !x.f.ready && !x.f.raw; });
+      m = !needs.length ? 'cold' : (needs.some(function (x) { return x.f.af; }) ? 'air' : 'pan');
+    }
+    var steps = [];
+    L.forEach(function (x) { if (x.f.pre) steps.push(cn(x.f) + '：' + x.f.pre + '。'); });
+    var cookNoOil = cook.filter(function (x) { return x.f.id !== 'oil'; });
+    var oilTxt = oil ? '橄欖油' : '少許油（噴油或 1 小匙）';
+
+    if (m === 'air' || m === 'oven') {
+      var A = cookNoOil.filter(function (x) { return x.f.af; });
+      var rest = cookNoOil.filter(function (x) { return !x.f.af && !x.f.raw; });
+      if (A.length) {
+        steps.push('把' + list(A) + '切成適口大小、擦乾水分，拌' + oilTxt + '、鹽和黑胡椒。');
+        steps.push(m === 'air'
+          ? timeline(A, function (x) { return x.f.af; }, '氣炸鍋 200°C ', '烤') + '中途翻一次，食材平鋪不要疊。'
+          : '烤箱預熱 220°C，烤盤鋪烘焙紙。' + timeline(A, function (x) { return x.f.af + 5; }, '', '烤') + '中途翻一次。');
+      }
+      if (rest.length) steps.push('另外處理：' + rest.map(fallback).join('；') + '。');
+    } else if (m === 'pan') {
+      var hardStarch = cookNoOil.filter(function (x) { return x.f.cat === 'starch'; });
+      if (hardStarch.length) steps.push(list(hardStarch) + '先用電鍋蒸熟或微波 5–6 分鐘。');
+      var prot = cookNoOil.filter(function (x) { return x.f.cat === 'protein' || x.f.cat === 'sea' || x.f.cat === 'egg'; });
+      var vegs = cookNoOil.filter(function (x) { return x.f.cat === 'veg' || x.f.cat === 'mush'; }).sort(function (a, b) { return (b.f.af || 5) - (a.f.af || 5); });
+      steps.push('不沾鍋中火，放' + oilTxt + '。');
+      prot.forEach(function (x) { steps.push(cn(x.f) + '：' + (x.f.pan || '煎到全熟') + '，盛起備用。'); });
+      if (vegs.length) steps.push('同一鍋依序放入' + list(vegs) + '（硬的先下），炒 2–4 分鐘，加 1–2 大匙水幫助熟透。');
+      steps.push(prot.length && vegs.length ? '把' + list(prot) + '放回鍋裡拌勻，鹽和黑胡椒調味。' : '鹽和黑胡椒調味。');
+    } else if (m === 'steam') {
+      var S = cookNoOil.filter(function (x) { return x.f.steam != null; });
+      var late = S.filter(function (x) { return (x.f.cat === 'veg' || x.f.cat === 'mush') && x.f.steam <= 0.5; });
+      var early = S.filter(function (x) { return late.indexOf(x) < 0; });
+      var restS = cookNoOil.filter(function (x) { return S.indexOf(x) < 0 && !x.f.raw; });
+      if (!early.length && late.length) { early = late; late = []; }
+      var cups = 0;
+      early.forEach(function (x) { cups = Math.max(cups, x.f.steam); });
+      if (early.length) steps.push('把' + list(early) + '放進內鍋或蒸盤，撒少許鹽或淋一點醬油。外鍋放 ' + cups + ' 杯水，蒸到開關跳起。');
+      if (late.length) steps.push('開關跳起後放入' + list(late) + '，外鍋再加 ¼ 杯水蒸一次。');
+      if (restS.length) steps.push('另外處理：' + restS.map(fallback).join('；') + '。');
+    } else if (m === 'soup') {
+      var eggs = cookNoOil.filter(function (x) { return x.f.grp === 'egg'; });
+      var B = cookNoOil.filter(function (x) { return x.f.boil != null && eggs.indexOf(x) < 0; });
+      if (B.length) steps.push(timeline(B, function (x) { return x.f.boil; }, '湯鍋加水約 500ml 煮滾，', '煮'));
+      if (L.some(function (x) { return x.f.id === 'konjac' || x.f.id === 'glassnoodle'; })) steps.push('起鍋前 3 分鐘放入' + list(L.filter(function (x) { return x.f.id === 'konjac' || x.f.id === 'glassnoodle'; })) + '。');
+      if (eggs.length) steps.push('最後轉小火，' + list(eggs) + '打散慢慢倒入成蛋花。');
+      steps.push('加鹽和白胡椒調味。');
+    } else {
+      var hot = L.filter(function (x) { return !x.f.ready && !x.f.raw; });
+      if (hot.length) steps.push('這些要先煮熟或改買現成熟食：' + hot.map(function (x) { return cn(x.f) + (x.f.boil ? '（水煮 ' + x.f.boil + ' 分鐘）' : ''); }).join('、') + '。');
+      var dairy = L.filter(function (x) { return x.f.cat === 'dairy' && !x.f.pu; });
+      var fruits = L.filter(function (x) { return x.f.cat === 'fruit'; });
+      if (dairy.length && fruits.length && !L.some(function (x) { return catGroup(x.f) === 'P' && x.f.cat !== 'dairy'; })) {
+        steps.push('碗底放' + list(dairy) + '，鋪上切好的' + list(fruits) + '。');
+        var tops = L.filter(function (x) { return x.f.cat === 'fat' || x.f.id === 'oats'; });
+        if (tops.length) steps.push('撒上' + list(tops) + '。');
+      } else {
+        steps.push('全部切成適口大小放進大碗。');
+        steps.push('加檸檬汁、黑胡椒和少許鹽拌勻，也可以用 1 大匙優格當醬。');
+      }
+    }
+    if (m !== 'cold') {
+      var sides = ready.concat(rawOnly).filter(function (x) { return x.f.cat !== 'fruit' && x.f.cat !== 'dairy' && !MINOR[x.f.id] && !(m === 'soup' && (x.f.id === 'konjac' || x.f.id === 'glassnoodle')); });
+      if (sides.length) steps.push('盛盤，搭配' + list(sides) + '。');
+      var dr = ready.filter(function (x) { return x.f.cat === 'dairy'; });
+      if (dr.length) steps.push(list(dr) + '另外喝或當飯後點心。');
+      var fr = L.filter(function (x) { return x.f.cat === 'fruit'; });
+      if (fr.length) steps.push(list(fr) + '當飯後水果。');
+    }
+    if (L.some(function (x) { return x.f.id === 'nori'; })) steps.push('海苔最後再包或撒上，才會脆。');
+
+    var byP = L.filter(function (x) { return !MINOR[x.f.id]; }).slice().sort(function (a, b) { return mac(b.f, b.q).p - mac(a.f, a.q).p; });
+    var main = byP[0];
+    var second = L.filter(function (x) { return x !== main && (x.f.cat === 'veg' || x.f.cat === 'mush' || x.f.cat === 'starch') && !MINOR[x.f.id]; })[0];
+    var fr0 = L.filter(function (x) { return x.f.cat === 'fruit'; })[0];
+    var a = main ? short(main.f) : '', b = second ? short(second.f) : '';
+    var title;
+    if (m === 'air') title = '氣炸' + a + b;
+    else if (m === 'oven') title = '烤' + a + b;
+    else if (m === 'pan') title = main && catGroup(main.f) === 'P' ? '香煎' + a + (b ? '佐' + b : '') : a + b + '快炒';
+    else if (m === 'steam') title = '電鍋蒸' + a + b;
+    else if (m === 'soup') title = a + b + '湯';
+    else if (main && main.f.cat === 'dairy') title = a + (fr0 ? short(fr0.f) : '') + '碗';
+    else title = a + b + '沙拉碗';
+
+    var t = totals(selItems), notes = [];
+    if (t.p >= 30) notes.push('蛋白質 ' + Math.round(t.p) + 'g，一餐夠用。');
+    else if (t.p < 20) notes.push('蛋白質只有 ' + Math.round(t.p) + 'g，可以加雞胸、蛋、豆腐或乳清。');
+    if (!L.some(function (x) { return (x.f.cat === 'veg' || x.f.cat === 'mush') && x.f.id !== 'nori'; })) notes.push('沒有蔬菜，可以補一份花椰菜或生菜。');
+    if (t.f > 30) notes.push('脂肪 ' + Math.round(t.f) + 'g 偏高，油脂類可以減半。');
+    if (t.k > 750) notes.push('熱量偏高，適合訓練日；休息日可以減少主食。');
+    return { title: title, steps: steps, notes: notes, t: t, m: m };
+  }
+
+  // ---------------------------------------------------------------- state
+  var sel = [{ id: 'chicken', q: 150 }, { id: 'sweetpotato', q: 150 }, { id: 'broccoli', q: 100 }, { id: 'oil', q: 5 }];
+  var focus = 'chicken';
+  var cat = 'mine', genMode = 'auto', libFilter = '全部', libSort = 'default';
+  var sheetState = null;
+  var book = new Map();
+  var custom = [];
+  var aiCache = {};
+  var col = null, sampleFn = null, LS = 'snow-fridge-v3';
+  var showCustomForm = false;
+
+  // ---------------------------------------------------------------- render pieces
+  function stars(n, key, sm) {
+    var h = '<div class="stars' + (sm ? ' sm' : '') + '" role="group" aria-label="我的評價 ' + n + ' 顆星">';
+    for (var i = 1; i <= 5; i++) h += '<button type="button" class="' + (i <= n ? 'on' : '') + '"' + (sm ? ' tabindex="-1"' : ' data-star="' + i + '" data-key="' + key + '" aria-label="' + i + ' 顆星"') + '>★</button>';
+    return h + '</div>';
+  }
+  function meter(label, v, cls) {
+    var w = v ? v / 5 * 100 : 0;
+    return '<div class="meter ' + cls + '"><span class="ml">' + label + '</span><span class="mt"><i style="width:' + w + '%"></i></span><b class="num">' + scoreTxt(v) + '</b></div>';
+  }
+  function macroBlock(t) {
+    var pk = t.p * 4, fk = t.f * 9, ck = t.c * 4, sum = pk + fk + ck || 1;
+    var pp = Math.round(pk / sum * 100), fp = Math.round(fk / sum * 100), cp = Math.max(0, 100 - pp - fp);
+    return '<div class="kcal"><strong class="num">' + Math.round(t.k) + '</strong><span>大卡</span></div>' +
+      '<div class="bar" aria-hidden="true"><i style="width:' + pp + '%;background:var(--prot)"></i><i style="width:' + fp + '%;background:var(--fat)"></i><i style="width:' + cp + '%;background:var(--carb)"></i></div>' +
+      '<div class="macros">' +
+      '<div class="macro"><label><i style="background:var(--prot)"></i>蛋白質</label><strong class="num">' + r1(t.p) + 'g</strong><small>' + pp + '% 熱量</small></div>' +
+      '<div class="macro"><label><i style="background:var(--fat)"></i>脂肪</label><strong class="num">' + r1(t.f) + 'g</strong><small>' + fp + '% 熱量</small></div>' +
+      '<div class="macro"><label><i style="background:var(--carb)"></i>碳水</label><strong class="num">' + r1(t.c) + 'g</strong><small>' + cp + '% 熱量</small></div></div>';
+  }
+  function isSel(id) { return sel.some(function (s) { return s.id === id; }); }
+  function foodsIn(c) {
+    if (c === 'mine') return MINE.map(function (id) { return FM[id]; }).concat(custom);
+    return F.filter(function (f) { return f.cat === c; });
+  }
+  function renderCats() {
+    $('catNav').innerHTML = CATS.map(function (c) {
+      var n = foodsIn(c.id).filter(function (f) { return isSel(f.id); }).length;
+      return '<button type="button" class="seg" aria-pressed="' + (cat === c.id) + '" data-cat="' + c.id + '">' + c.n + (n ? '<span class="n">' + n + '</span>' : '') + '</button>';
+    }).join('');
+  }
+  function renderShelf() {
+    var h = '<div class="chips">';
+    foodsIn(cat).forEach(function (f) { h += '<button type="button" class="chip" aria-pressed="' + isSel(f.id) + '" data-food="' + f.id + '">' + esc(f.n) + '</button>'; });
+    if (cat === 'mine') h += '<button type="button" class="chip add" data-addcustom="1">＋ 自訂食材</button>';
+    h += '</div>';
+    if (cat === 'mine' && showCustomForm) {
+      h += '<form class="form" id="cfForm" autocomplete="off">' +
+        '<label class="full">名稱<input id="cf-n" required maxlength="20" placeholder="例如：BodyGoals 乳清 PRO"></label>' +
+        '<label>單位<input id="cf-u" maxlength="4" value="份"></label>' +
+        '<label>熱量（大卡）<input id="cf-k" type="number" inputmode="decimal" min="0" step="any" required></label>' +
+        '<label>蛋白質 g<input id="cf-p" type="number" inputmode="decimal" min="0" step="any" value="0"></label>' +
+        '<label>脂肪 g<input id="cf-f" type="number" inputmode="decimal" min="0" step="any" value="0"></label>' +
+        '<label>碳水 g<input id="cf-c" type="number" inputmode="decimal" min="0" step="any" value="0"></label>' +
+        '<div style="display:flex;gap:8px;align-items:end"><button class="primary" type="submit">新增</button><button class="ghost" type="button" data-addcustom="0">取消</button></div>' +
+        '</form><p class="hint">照包裝上「每一份」的營養標示填寫。</p>';
+      if (custom.length) h += '<div>' + custom.map(function (f) {
+        return '<div class="item"><div><b>' + esc(f.n) + '</b><small class="num">每' + esc(f.un) + ' ' + f.k + ' 大卡 · 蛋白質 ' + f.p + 'g</small></div><button type="button" class="ghost" data-delcustom="' + f.id + '">刪除</button></div>';
+      }).join('') + '</div>';
+    } else if (cat === 'mine') {
+      h += '<p class="hint">Subway 和乳清是估算值，可以用「自訂食材」照包裝輸入準確數字。</p>';
+    }
+    $('shelf').innerHTML = h;
+    if (showCustomForm) { var n = $('cf-n'); if (n) n.focus(); }
+  }
+  function renderPairs() {
+    var box = $('pairs');
+    if (!focus || !FM[focus] || !isSel(focus)) { focus = sel.length ? sel[sel.length - 1].id : null; }
+    if (!focus) { box.hidden = true; return; }
+    var ps = pairsFor(focus);
+    if (!ps.length) { box.hidden = true; return; }
+    box.hidden = false;
+    box.innerHTML = '<div class="row"><h2>' + esc(short(FM[focus])) + ' 適合搭</h2><span class="hint">點一下加入</span></div><div class="pairs">' +
+      ps.map(function (p) { return '<button type="button" class="pair" data-food="' + p.id + '" data-pair="1"><b>＋ ' + esc(short(FM[p.id])) + '</b><small>' + esc(p.why) + '</small></button>'; }).join('') + '</div>';
+  }
+  function renderTray() {
+    if (!sel.length) { $('tray').innerHTML = '<p class="empty">從上面點食材放進來，可以調整份量。</p>'; return; }
+    $('tray').innerHTML = sel.map(function (it) {
+      var f = FM[it.id]; if (!f) return '';
+      var m = mac(f, it.q);
+      return '<div class="item' + (it.id === focus ? ' focus' : '') + '"><button type="button" class="iname" data-focus="' + it.id + '"><b>' + esc(f.n) + '</b><small class="num">' + Math.round(m.k) + ' 大卡 · 蛋白質 ' + r1(m.p) + 'g</small></button>' +
+        '<div style="display:flex;align-items:center;gap:2px"><div class="step"><button type="button" data-dec="' + it.id + '" aria-label="減少' + esc(f.n) + '">−</button><span class="num">' + amount(f, it.q) + '</span><button type="button" data-inc="' + it.id + '" aria-label="增加' + esc(f.n) + '">＋</button></div>' +
+        '<button type="button" class="x" data-rm="' + it.id + '" aria-label="移除' + esc(f.n) + '">×</button></div></div>';
+    }).join('');
+  }
+  function renderResult() {
+    var box = $('result');
+    if (!sel.length) { box.innerHTML = '<h2>食譜</h2><p class="empty">選好食材後，這裡會產生做法和營養。</p>'; return; }
+    var r = generate(sel, genMode), k = comboKey(sel), rec = book.get(k), hs = health(sel), ai = aiCache[k] || (rec && rec.ai);
+    var h = '<div class="scroller" role="group" aria-label="料理方式">';
+    GEN.forEach(function (g) { h += '<button type="button" class="seg" aria-pressed="' + (genMode === g.id) + '" data-gen="' + g.id + '">' + g.n + (genMode === 'auto' && g.id === r.m ? ' ✓' : '') + '</button>'; });
+    h += '</div><h3 class="rname">' + esc(r.title) + '</h3>' + macroBlock(r.t);
+    h += '<div class="scores">' + meter('健康', hs.s, 'h') + meter('好吃', ai ? ai.taste : 0, 't') + '</div>';
+    h += '<p class="hint">' + esc(hs.why.join('・')) + '</p>';
+    if (ai) h += '<p class="notes"><b>Claude：</b>' + esc(ai.comment) + (ai.tip ? '<br><b>建議：</b>' + esc(ai.tip) : '') + '</p>';
+    else if (sampleFn) h += '<div><button type="button" class="ghost" id="askAi">請 Claude 評好吃程度</button> <span class="hint" id="aiStatus"></span></div>';
+    h += '<ol class="steps">' + r.steps.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ol>';
+    if (r.notes.length) h += '<p class="notes">' + r.notes.map(esc).join('<br>') + '</p>';
+    h += '<div><div class="hint">' + (rec ? '已收藏，點星星可修改' : '我的評價：打星就收藏') + '</div>' + stars(rec ? rec.stars || 0 : 0, k) + '</div><div class="status" id="status"></div>';
+    box.innerHTML = h;
+  }
+  function matchInfo(r) {
+    var core = recItems(r, false).filter(function (x) { return !MINOR[x.id] && FM[x.id].cat !== 'hide'; });
+    var have = {};
+    sel.forEach(function (s) { var f = FM[s.id]; if (f) { have[s.id] = 1; if (f.grp) have['g:' + f.grp] = 1; } });
+    var got = core.filter(function (x) { var f = FM[x.id]; return have[x.id] || (f.grp && have['g:' + f.grp]); });
+    return { got: got.length, total: core.length, miss: core.filter(function (x) { return got.indexOf(x) < 0; }) };
+  }
+  function renderMatches() {
+    if (!sel.length) { $('matches').innerHTML = ''; return; }
+    var arr = allRecipes().filter(function (r) { return r.m !== '外食'; }).map(function (r) { return { r: r, mi: matchInfo(r) }; })
+      .filter(function (x) { return x.mi.total && (x.mi.got >= 2 || (x.mi.got >= 1 && x.mi.total <= 2)); })
+      .sort(function (a, b) { return (b.mi.got / b.mi.total) - (a.mi.got / a.mi.total) || b.mi.got - a.mi.got; }).slice(0, 6);
+    if (!arr.length) { $('matches').innerHTML = ''; return; }
+    $('matches').innerHTML = '<p class="sec-h">用這些食材也能做</p><div class="rlist">' + arr.map(function (x) {
+      return rowHtml(x.r, x.r.m + ' · ' + (x.mi.miss.length ? '還缺 ' + x.mi.miss.map(function (m) { return short(FM[m.id]); }).join('、') : '食材都有了'));
+    }).join('') + '</div>';
+  }
+  var HSC = {};
+  function healthOf(r) { if (HSC[r.id] == null) HSC[r.id] = health(recItems(r, false)).s; return HSC[r.id]; }
+  function rowHtml(r, subOverride) {
+    var t = totals(recItems(r, false)), rec = book.get('r-' + r.id);
+    var mins = (r.pt || 0) + (r.ct || 0);
+    var sub = subOverride || (r.m + (mins ? ' · ' + mins + ' 分鐘' : '') + ' · ' + r.meal);
+    return '<button type="button" class="rrow" data-open="' + esc(r.id) + '"><span class="t">' + esc(r.n) +
+      (r.tag ? '<span class="tag' + (r.tag === '熱門' || r.tag === '新' ? ' hot' : '') + '">' + esc(r.tag) + '</span>' : '') +
+      (rec && rec.stars ? stars(rec.stars, '', true) : '') + '</span>' +
+      '<span class="k"><b>' + Math.round(t.k) + '</b><small>P ' + Math.round(t.p) + 'g</small></span>' +
+      '<span class="m">' + esc(sub) + '　好吃 <b class="num">' + scoreTxt(r.taste) + '</b> · 健康 <b class="num">' + scoreTxt(healthOf(r)) + '</b></span></button>';
+  }
+  function renderLib() {
+    var filters = ['全部'].concat(FEED.length ? ['最新'] : []).concat(METHODS);
+    $('methodNav').innerHTML = filters.map(function (m) { return '<button type="button" class="seg" aria-pressed="' + (libFilter === m) + '" data-lib="' + m + '">' + m + (m === '最新' ? '<span class="n">' + FEED.length + '</span>' : '') + '</button>'; }).join('');
+    var arr = allRecipes().filter(function (r) { return libFilter === '全部' || (libFilter === '最新' ? r.feed : r.m === libFilter); });
+    var key = {
+      health: function (r) { return -healthOf(r) * 10 - (r.taste || 0); },
+      taste: function (r) { return -(r.taste || 0) * 10 - healthOf(r); },
+      protein: function (r) { return -totals(recItems(r, false)).p; },
+      kcal: function (r) { return totals(recItems(r, false)).k; }
+    }[libSort];
+    if (key) arr = arr.slice().sort(function (a, b) { return key(a) - key(b); });
+    $('libCount').textContent = arr.length + ' 道';
+    $('libList').innerHTML = arr.map(function (r) { return rowHtml(r); }).join('') || '<p class="empty" style="padding:14px">這個分類還沒有食譜。</p>';
+  }
+  function normItems(items) {
+    return (items || []).map(function (x) { return { id: x.id, q: x.q != null ? x.q : x.g }; }).filter(function (x) { return FM[x.id] && x.q > 0; });
+  }
+  function renderFav() {
+    var arr = Array.from(book.entries()).filter(function (e) { return e[1] && e[1].stars; })
+      .sort(function (a, b) { return (b[1].stars - a[1].stars) || ((b[1].ts || 0) - (a[1].ts || 0)); });
+    $('favCount').textContent = arr.length ? arr.length : '';
+    if (!arr.length) { $('favList').innerHTML = '<div class="card"><p class="empty">還沒有收藏。在食譜或冰箱頁打星，就會出現在這裡。</p></div>'; return; }
+    var libs = arr.filter(function (e) { return e[1].lib && RM[e[1].lib]; });
+    var combos = arr.filter(function (e) { return !e[1].lib && e[1].items; });
+    var h = '';
+    if (libs.length) h += '<p class="sec-h">食譜</p><div class="rlist">' + libs.map(function (e) { return rowHtml(RM[e[1].lib]); }).join('') + '</div>';
+    if (combos.length) {
+      h += '<p class="sec-h" style="margin-top:6px">我的組合</p><div class="rlist">' + combos.map(function (e) {
+        var r = e[1], its = normItems(r.items), t = totals(its);
+        return '<button type="button" class="rrow" data-loadcombo="' + e[0] + '"><span class="t">' + esc(r.name || '我的組合') + stars(r.stars, '', true) + '</span>' +
+          '<span class="k"><b>' + Math.round(t.k) + '</b><small>P ' + Math.round(t.p) + 'g</small></span>' +
+          '<span class="m">' + esc(its.map(function (x) { return short(FM[x.id]); }).join('、')) + '</span></button>';
+      }).join('') + '</div><p class="hint">點組合會放回冰箱，可以再調整。</p>';
+    }
+    $('favList').innerHTML = h;
+  }
+  function renderDock() {
+    var onFridge = !$('p-fridge').hidden;
+    if (!sel.length || !onFridge || !$('sheet').hidden) { $('dock').hidden = true; return; }
+    var t = totals(sel);
+    $('dockText').innerHTML = sel.length + ' 樣食材<br><b>' + Math.round(t.k) + '</b> 大卡 · 蛋白質 <b>' + Math.round(t.p) + '</b>g';
+    $('dock').hidden = false;
+  }
+  function section(title, body) { return body ? '<div class="card"><h2>' + title + '</h2>' + body + '</div>' : ''; }
+  function renderSheet() {
+    if (!sheetState) return;
+    var r = RM[sheetState.id]; if (!r) return;
+    var big = !!sheetState.big, items = recItems(r, big), t = totals(items), rec = book.get('r-' + r.id), hs = health(items);
+    var mins = (r.pt || 0) + (r.ct || 0);
+    var src = typeof r.src === 'string' ? SRC[r.src] : r.src;
+    var h = '<div style="display:flex;flex-direction:column;gap:6px"><div class="meta"><span class="tag">' + esc(r.m) + '</span><span class="tag">' + esc(r.meal) + '</span>' + (r.tag ? '<span class="tag' + (r.tag === '熱門' || r.tag === '新' ? ' hot' : '') + '">' + esc(r.tag) + '</span>' : '') + '</div>' +
+      '<h2 class="rname" id="sheetTitle">' + esc(r.n) + '</h2><p class="muted" style="margin:0;font-size:14px">' + esc(r.desc) + '</p>' +
+      (mins ? '<div class="times"><span>備料 <b class="num">' + (r.pt || 0) + '</b> 分</span><span>烹調 <b class="num">' + (r.ct || 0) + '</b> 分</span><span>共 <b class="num">' + mins + '</b> 分</span></div>' : '') + '</div>';
+    h += '<div class="card">';
+    if (hasBig(r)) h += '<div class="toggle" role="group" aria-label="份量"><button type="button" data-big="0" aria-pressed="' + !big + '">減脂份</button><button type="button" data-big="1" aria-pressed="' + big + '">增肌份</button></div>';
+    h += macroBlock(t) + '</div>';
+    h += '<div class="card"><h2>Claude 評分</h2><div class="scores">' + meter('好吃', r.taste, 't') + meter('健康', hs.s, 'h') + '</div>' +
+      (r.tn ? '<p style="margin:0;font-size:14px">' + esc(r.tn) + '</p>' : '') + '<p class="hint">健康分數：' + esc(hs.why.join('・')) + '</p></div>';
+    h += section('食材', '<ul class="ing">' + items.map(function (x) { var f = FM[x.id]; return '<li><span>' + esc(f.n) + '</span><span>' + esc(amount(f, x.q)) + '</span></li>'; }).join('') +
+      (r.season ? '<li><span>調味</span><span class="seas">' + esc(r.season) + '</span></li>' : '') + '</ul>');
+    h += section('做法', '<ol class="steps">' + r.steps.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ol>' +
+      (r.done ? '<p class="notes"><b>熟了沒：</b>' + esc(r.done) + '</p>' : '') + (r.alt ? '<p class="notes"><b>其他做法：</b>' + esc(r.alt) + '</p>' : ''));
+    var extra = '';
+    if (r.tips && r.tips.length) extra += '<div class="kv"><b>小技巧</b><ul>' + r.tips.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>';
+    if (r.keep) extra += '<div class="kv"><b>保存與備餐</b><p>' + esc(r.keep) + '</p></div>';
+    if (r.swap) extra += '<div class="kv"><b>食材替換</b><p>' + esc(r.swap) + '</p></div>';
+    h += section('實用資訊', extra);
+    h += '<div class="card"><div class="row"><div><div class="hint">' + (rec && rec.stars ? '我的評價（再點同一顆可取消）' : '我的評價：打星就收藏') + '</div>' + stars(rec ? rec.stars || 0 : 0, 'r-' + r.id) + '</div>' +
+      '<button type="button" class="ghost" data-tofridge="' + esc(r.id) + '">放進冰箱改</button></div><div class="status" id="sheetStatus"></div>' +
+      (src ? '<p class="hint">參考來源：' + (src.u ? '<a href="' + esc(src.u) + '" target="_blank" rel="noopener">' + esc(src.n) + '</a>' : esc(src.n)) + (r.added ? '（' + esc(r.added) + ' 加入）' : '') + '</p>' : '') + '</div>';
+    $('sheetBody').innerHTML = h;
+  }
+  function renderFridge() { renderCats(); renderShelf(); renderPairs(); renderTray(); renderResult(); renderMatches(); renderDock(); }
+  function renderAll() { renderFridge(); renderLib(); renderFav(); renderSheet(); }
+
+  // ---------------------------------------------------------------- feed (recipes added on a schedule)
+  function feedToRecipe(id, d) {
+    if (!d || !d.n || !Array.isArray(d.items) || !Array.isArray(d.steps)) return null;
+    var items = [];
+    d.items.forEach(function (it, i) {
+      if (!it) return;
+      var q = Number(it.q) || 0, qb = it.qBig != null ? Number(it.qBig) : null;
+      var known = it.id && FM[it.id] && String(it.id).indexOf('fx-') !== 0 && FM[it.id].cat !== 'custom';
+      if (known && q > 0) { items.push(qb != null ? [it.id, q, qb] : [it.id, q]); return; }
+      var fid = 'fx-' + id + '-' + i;
+      FM[fid] = { id: fid, n: String(it.n || '食材'), s: String(it.n || '食材'), cat: it.cat || 'x', pu: 1, un: '', lab: String(it.label || (q ? q + (it.unit || 'g') : '')), g: 1,
+        k: Number(it.k) || 0, p: Number(it.p) || 0, f: Number(it.f) || 0, c: Number(it.c) || 0, ready: 1 };
+      items.push([fid, 1]);
+    });
+    if (!items.length) return null;
+    return { id: 'f-' + id, feed: 1, n: String(d.n), m: METHODS.indexOf(d.m) >= 0 ? d.m : '平底鍋', meal: d.meal || '正餐', pt: Number(d.pt) || 0, ct: Number(d.ct) || 0,
+      tag: '新', taste: Math.max(1, Math.min(5, Number(d.taste) || 3)), tn: d.tn || '', desc: d.desc || '', items: items, season: d.season || '',
+      steps: d.steps.map(String), done: d.done || '', tips: Array.isArray(d.tips) ? d.tips.map(String) : [], keep: d.keep || '', swap: d.swap || '', alt: d.alt || '',
+      src: d.src && d.src.n ? { n: String(d.src.n), u: /^https:\/\//.test(d.src.u || '') ? d.src.u : '' } : null, added: d.added || '' };
+  }
+  function applyFeed(docs) {
+    FEED = docs.map(function (dd) { return feedToRecipe(dd.id, dd.data()); }).filter(Boolean)
+      .sort(function (a, b) { return (b.added || '').localeCompare(a.added || ''); });
+    indexRecipes(); COOC = null; HSC = {};
+    renderAll();
+  }
+
+  // ---------------------------------------------------------------- storage
+  var chain = Promise.resolve();
+  function flash(id, msg) { var s = $(id); if (s) s.textContent = msg; }
+  function lsSave() { try { localStorage.setItem(LS, JSON.stringify({ book: Array.from(book.entries()), custom: custom })); } catch (e) {} }
+  function lsLoad() {
+    try {
+      var raw = localStorage.getItem(LS) || localStorage.getItem('snow-fridge-v2');
+      if (raw) { var o = JSON.parse(raw); (o.book || []).forEach(function (e) { book.set(e[0], e[1]); }); custom = o.custom || []; }
+    } catch (e) {}
+  }
+  function write(docId, val) {
+    if (col) {
+      chain = chain.then(function () { return val ? col.doc(docId).set(val) : col.doc(docId).delete(); })
+        .catch(function () { flash('status', '儲存失敗，稍後再試'); flash('sheetStatus', '儲存失敗，稍後再試'); });
+    }
+    lsSave();
+  }
+  function rate(key, n) {
+    var rec = book.get(key) || {};
+    var next = Object.assign({}, rec, { stars: rec.stars === n ? 0 : n, ts: Date.now() });
+    if (key.indexOf('r-') === 0) next.lib = key.slice(2);
+    else {
+      if (!next.items) {
+        var r = generate(sel, genMode);
+        next.items = sel.map(function (s) { return { id: s.id, q: s.q }; });
+        next.name = r.title; next.m = r.m;
+      }
+      if (aiCache[key]) next.ai = aiCache[key];
+    }
+    if (!next.stars) { book.delete(key); write(key, null); } else { book.set(key, next); write(key, next); }
+    renderAll();
+    flash(key.indexOf('r-') === 0 ? 'sheetStatus' : 'status', next.stars ? '已收藏 ' + next.stars + ' 顆星' : '已取消收藏');
+  }
+  function saveCustom() { indexFoods(custom); write('custom-foods', { list: custom }); }
+
+  // ---------------------------------------------------------------- Claude taste rating for a free combo
+  var aiBusy = false;
+  function askAi() {
+    if (!sampleFn || aiBusy) return;
+    var k = comboKey(sel), r = generate(sel, genMode), t = totals(sel);
+    var lines = sel.map(function (s) { var f = FM[s.id]; return '- ' + cn(f) + ' ' + amount(f, s.q); }).join('\n');
+    var prompt = '你是懂料理也懂運動營養的廚師。請評估這道料理（目標：增肌減脂）。\n' +
+      '名稱：' + r.title + '\n料理方式：' + (GEN.filter(function (g) { return g.id === r.m; })[0] || {}).n + '\n食材：\n' + lines +
+      '\n做法：' + r.steps.join(' ') + '\n營養：' + Math.round(t.k) + ' 大卡，蛋白質 ' + Math.round(t.p) + 'g，脂肪 ' + Math.round(t.f) + 'g，碳水 ' + Math.round(t.c) + 'g\n\n' +
+      '請用 1 到 5 分（可以用 0.5）評「好吃程度」，考慮口味搭配、口感和調味。用繁體中文。只回一個 JSON：' +
+      '{"taste": 4, "comment": "30 字內說明好不好吃、為什麼", "tip": "30 字內讓它更好吃的建議"}';
+    aiBusy = true; flash('aiStatus', '思考中…');
+    var btn = $('askAi'); if (btn) btn.disabled = true;
+    sampleFn.json(prompt, { modelTier: 'quick' }).then(function (j) {
+      var taste = Math.max(1, Math.min(5, Math.round((Number(j && j.taste) || 3) * 2) / 2));
+      aiCache[k] = { taste: taste, comment: String((j && j.comment) || '').slice(0, 80), tip: String((j && j.tip) || '').slice(0, 80) };
+      var rec = book.get(k);
+      if (rec) { rec = Object.assign({}, rec, { ai: aiCache[k] }); book.set(k, rec); write(k, rec); }
+      renderResult();
+    }).catch(function (e) {
+      var code = e && e.code;
+      if (code === 'not_granted' || code === 'sampling_disabled' || code === 'capability_disabled' || code === 'capability_removed' || code === 'not_declared') { sampleFn = null; renderResult(); return; }
+      flash('aiStatus', code === 'rate_limited' ? '太頻繁了，稍後再試' : '沒有成功，可以再按一次');
+      var b = $('askAi'); if (b) b.disabled = false;
+    }).then(function () { aiBusy = false; });
+  }
+
+  // ---------------------------------------------------------------- events
+  function showTab(t) {
+    ['fridge', 'lib', 'fav'].forEach(function (id) { $('p-' + id).hidden = id !== t; $('t-' + id).setAttribute('aria-selected', String(id === t)); });
+    renderDock();
+  }
+  var lastFocus = null;
+  function openSheet(id) {
+    lastFocus = document.activeElement;
+    sheetState = { id: id, big: false };
+    renderSheet();
+    $('sheet').hidden = false; $('sheet').scrollTop = 0;
+    document.body.style.overflow = 'hidden';
+    renderDock(); $('sheetBack').focus();
+  }
+  function closeSheet() {
+    $('sheet').hidden = true; sheetState = null; document.body.style.overflow = '';
+    renderDock();
+    if (lastFocus && lastFocus.focus) try { lastFocus.focus(); } catch (e) {}
+  }
+  function loadItems(items) {
+    sel = items.map(function (x) { return { id: x.id, q: x.q }; }).filter(function (x) { return String(x.id).indexOf('fx-') !== 0; });
+    focus = sel.length ? sel[0].id : null; genMode = 'auto';
+    if (!$('sheet').hidden) closeSheet();
+    showTab('fridge'); renderFridge();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('button'); if (!el) return;
+    var d = el.dataset;
+    if (el.id === 'sheetBack') return closeSheet();
+    if (el.id === 'dockGo') return $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (el.id === 'clear') { sel = []; focus = null; return renderFridge(); }
+    if (el.id === 'askAi') return askAi();
+    if (d.tab) return showTab(d.tab);
+    if (d.cat) { cat = d.cat; showCustomForm = false; renderCats(); return renderShelf(); }
+    if (d.addcustom != null) { showCustomForm = d.addcustom === '1'; return renderShelf(); }
+    if (d.delcustom) {
+      custom = custom.filter(function (f) { return f.id !== d.delcustom; });
+      sel = sel.filter(function (s) { return s.id !== d.delcustom; });
+      saveCustom(); return renderFridge();
+    }
+    if (d.food) {
+      var i = sel.findIndex(function (s) { return s.id === d.food; });
+      if (i >= 0 && !d.pair) { sel.splice(i, 1); if (focus === d.food) focus = null; }
+      else if (i < 0) { sel.push({ id: d.food, q: FM[d.food].g }); if (!d.pair) focus = d.food; }
+      return renderFridge();
+    }
+    if (d.focus) { focus = d.focus; renderPairs(); return renderTray(); }
+    if (d.inc || d.dec) {
+      var id = d.inc || d.dec, it = sel.find(function (s) { return s.id === id; }), st = stepOf(FM[id]);
+      if (!it) return;
+      it.q = Math.max(st, Math.round((it.q + (d.inc ? st : -st)) * 10) / 10);
+      return renderFridge();
+    }
+    if (d.rm) { sel = sel.filter(function (s) { return s.id !== d.rm; }); if (focus === d.rm) focus = null; return renderFridge(); }
+    if (d.gen) { genMode = d.gen; return renderResult(); }
+    if (d.lib) { libFilter = d.lib; return renderLib(); }
+    if (d.open) return openSheet(d.open);
+    if (d.big != null) { sheetState.big = d.big === '1'; return renderSheet(); }
+    if (d.star) return rate(d.key, +d.star);
+    if (d.tofridge) return loadItems(recItems(RM[d.tofridge], sheetState && sheetState.big));
+    if (d.loadcombo) { var rec = book.get(d.loadcombo); if (rec) loadItems(normItems(rec.items)); }
+  });
+  document.addEventListener('change', function (e) { if (e.target.id === 'libSort') { libSort = e.target.value; renderLib(); } });
+  document.addEventListener('submit', function (e) {
+    if (e.target.id !== 'cfForm') return;
+    e.preventDefault();
+    function num(id) { var v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? Math.round(v * 10) / 10 : 0; }
+    var name = $('cf-n').value.trim(); if (!name) return;
+    var f = { id: 'cf' + Date.now().toString(36), n: name, s: name, cat: 'custom', pu: 1, un: ($('cf-u').value.trim() || '份'), g: 1, k: num('cf-k'), p: num('cf-p'), f: num('cf-f'), c: num('cf-c'), ready: 1 };
+    custom.push(f); saveCustom();
+    sel.push({ id: f.id, q: 1 }); focus = f.id;
+    showCustomForm = false; renderFridge();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
+
+  // ---------------------------------------------------------------- boot
+  lsLoad();
+  indexFoods(custom);
+  indexRecipes();
+  renderAll();
+  (async function () {
+    if (!window.claude || !window.claude.use) return;
+    window.claude.use('sample').then(function (s) { if (s) { sampleFn = s; renderResult(); } }).catch(function () {});
+    try {
+      var res = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+      var dbm = res[0], user = res[1];
+      if (!dbm) return;
+      try { dbm.collection('feed').onSnapshot(function (snap) { applyFeed(snap.docs); }, function () {}); } catch (e) {}
+      var uid = user ? await user.id() : null;
+      if (!uid) return;
+      col = dbm.collection('data/users/' + uid);
+      var first = true, localBook = new Map(book), localCustom = custom.slice();
+      col.onSnapshot(function (snap) {
+        var next = new Map(), cf = null;
+        snap.docs.forEach(function (dd) {
+          var v = dd.data();
+          if (dd.id === 'custom-foods') cf = (v && v.list) || [];
+          else if (v) next.set(dd.id, v);
+        });
+        if (first && !snap.metadata.fromCache) {
+          first = false;
+          localBook.forEach(function (v, k) { if (!next.has(k) && v && v.stars) { next.set(k, v); write(k, v); } });
+          if (!cf && localCustom.length) { cf = localCustom; write('custom-foods', { list: cf }); }
+        }
+        book = next;
+        if (cf) { custom = cf; indexFoods(custom); }
+        lsSave();
+        renderAll();
+      }, function () { col = null; });
+    } catch (e) { col = null; }
+  })();
+
+})();
+</script>
+
+</body></html>

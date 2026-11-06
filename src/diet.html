@@ -1,0 +1,1255 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>飲控計算機</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: 單欄記錄本。頂部固定分頁，今日頁以兩條進度尺（熱量、蛋白質）為主，其餘為清單。 */
+:root{
+  --bg:#f2f3ef; --surface:#fbfbf8; --ink:#14201b; --muted:#5b6a63; --line:#d9ddd5;
+  --kcal:#b4540a; --kcal-soft:#f4e1cf; --prot:#0b6e63; --prot-soft:#d3ebe6;
+  --over:#b3261e; --btn:#14201b; --btn-ink:#fbfbf8; --ok:#0b6e63; --ai:#4b4fb8; --ai-soft:#e3e4f6;
+  --num:'Barlow Condensed','Arial Narrow','Noto Sans TC',sans-serif;
+  --body:'Noto Sans TC','PingFang TC','Microsoft JhengHei',system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1512; --surface:#171f1b; --ink:#e9eee9; --muted:#9aa89f; --line:#2a3530;
+    --kcal:#f0a35e; --kcal-soft:#3a2a1b; --prot:#4fc4b4; --prot-soft:#17352f;
+    --over:#ff8a80; --btn:#e9eee9; --btn-ink:#0f1512; --ok:#4fc4b4; --ai:#a9acf5; --ai-soft:#24264a; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1512; --surface:#171f1b; --ink:#e9eee9; --muted:#9aa89f; --line:#2a3530;
+  --kcal:#f0a35e; --kcal-soft:#3a2a1b; --prot:#4fc4b4; --prot-soft:#17352f;
+  --over:#ff8a80; --btn:#e9eee9; --btn-ink:#0f1512; --ok:#4fc4b4; --ai:#a9acf5; --ai-soft:#24264a; color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.55;
+  padding-block:16px 96px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:10}
+.wrap{max-width:760px;margin:0 auto}
+h1,h2,h3{margin:0;font-weight:700;text-wrap:balance}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{opacity:.45;cursor:default}
+:focus-visible{outline:2px solid var(--prot);outline-offset:2px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:6px 10px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand h1{font-size:22px}
+.sync{font-size:12px;color:var(--muted)}
+.tabs{display:flex;gap:4px;margin-top:8px}
+.tab{flex:1;min-width:0;padding:8px 6px;border:0;border-bottom:3px solid transparent;background:none;font-weight:500;color:var(--muted)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink);font-weight:700}
+section.view{padding-top:18px;display:flex;flex-direction:column;gap:22px}
+
+.datenav{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.datenav .when{font-weight:700;font-size:17px;text-align:center;flex:1}
+.pill{display:inline-block;font-size:11px;padding:1px 7px;border:1px solid currentColor;border-radius:99px;margin-left:6px;vertical-align:2px;color:var(--muted);font-weight:500}
+.icon-btn{width:38px;height:38px;border:1px solid var(--line);background:var(--surface);border-radius:8px;display:grid;place-items:center;font-size:18px;line-height:1}
+
+.meters{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:520px){.meters{grid-template-columns:1fr}}
+.meter .lab{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.meter .big{font-size:44px;line-height:1.05;font-weight:600;margin-top:2px}
+.meter .big small{font-size:20px;color:var(--muted);font-weight:500}
+.track{height:10px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:8px}
+.fill{height:100%;width:0;border-radius:99px;transition:width .25s}
+.meter.k .big{color:var(--kcal)} .meter.k .fill{background:var(--kcal)}
+.meter.p .big{color:var(--prot)} .meter.p .fill{background:var(--prot)}
+.meter.over .big,.meter.over .note{color:var(--over)} .meter.over .fill{background:var(--over)}
+.meter .note{font-size:14px;margin-top:6px;font-weight:500}
+
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.sec-h h2{font-size:16px}
+.quick{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:6px 12px;font-size:14px}
+.chip.on{background:var(--btn);color:var(--btn-ink);border-color:var(--btn)}
+.chip .s{color:var(--muted);font-size:12px;margin-left:4px}
+.chip.on .s{color:inherit;opacity:.8}
+
+.rows{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.rows li{padding:10px 0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center}
+.rows .nm{font-weight:500;overflow-wrap:anywhere}
+.rows .meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.rows .vals{display:flex;gap:12px;align-items:baseline;justify-content:flex-end;white-space:nowrap}
+.v-k{color:var(--kcal);font-size:20px;font-weight:600}
+.v-p{color:var(--prot);font-size:20px;font-weight:600}
+.v-u{font-size:12px;color:var(--muted);margin-left:2px;font-family:var(--body);font-weight:400}
+.empty{padding:18px 0;color:var(--muted);font-size:14px;border-bottom:1px solid var(--line)}
+.ctrl{display:flex;align-items:center;gap:6px}
+.step{width:30px;height:30px;border:1px solid var(--line);background:var(--surface);border-radius:6px;font-size:16px;line-height:1}
+.qty{min-width:34px;text-align:center;font-family:var(--num);font-size:18px;font-weight:600}
+.x{border:0;background:none;color:var(--muted);font-size:18px;width:30px;height:30px}
+.star{border:0;background:none;color:var(--muted);font-size:18px;width:32px;height:30px;line-height:1}
+.star.on{color:var(--kcal)}
+
+.badge{display:inline-block;font-size:11px;padding:0 6px;border-radius:4px;margin-right:6px;border:1px solid var(--line);color:var(--muted);vertical-align:1px}
+.badge.label{background:var(--prot-soft);color:var(--prot);border-color:transparent}
+.badge.est{border-style:dashed}
+.badge.mine{background:var(--kcal-soft);color:var(--kcal);border-color:transparent}
+.badge.ai{background:var(--ai-soft);color:var(--ai);border-color:transparent}
+
+.supps{display:flex;flex-wrap:wrap;gap:8px}
+.check{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 12px;font-size:14px}
+.check input{width:18px;height:18px;accent-color:var(--prot)}
+.check.done{border-color:var(--prot);background:var(--prot-soft)}
+.check .s{color:var(--muted);font-size:12px}
+
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.plot{grid-column:1/-1;position:relative;height:110px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;align-items:end;border-bottom:1px solid var(--line)}
+.goal{position:absolute;left:0;right:0;border-top:1px dashed var(--muted);pointer-events:none}
+.goal span{position:absolute;right:0;top:-17px;font-size:11px;color:var(--muted);background:var(--bg);padding-left:4px}
+.bar{background:var(--kcal);border-radius:4px 4px 0 0;min-height:2px;width:100%}
+.bar.over{background:var(--over)}
+.wd{border:0;background:none;padding:4px 0;text-align:center;font-size:12px;color:var(--muted)}
+.wd.sel{color:var(--ink);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.wn{text-align:center;font-size:15px;font-family:var(--num);font-weight:600}
+.wn.p{color:var(--prot)} .wn.k{color:var(--kcal)}
+.rowlab{grid-column:1/-1;font-size:12px;color:var(--muted);margin-top:4px}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.field .lbl{font-size:13px;color:var(--muted)}
+input[type=text],input[type=number],select,textarea{width:100%;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+textarea{resize:vertical;min-height:64px}
+input[type=range]{width:100%;accent-color:var(--kcal)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.btn{border:1px solid var(--btn);background:var(--btn);color:var(--btn-ink);border-radius:8px;padding:8px 14px;font-weight:500}
+.btn.ghost{background:none;color:var(--ink);border-color:var(--line)}
+.btn.ai{background:var(--ai);border-color:var(--ai);color:var(--btn-ink)}
+.btn.sm{padding:5px 10px;font-size:14px}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sum-line{display:flex;gap:16px;align-items:baseline;flex-wrap:wrap}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:6px 10px;font-size:14px;min-width:40px}
+.seg button[aria-pressed="true"]{background:var(--btn);color:var(--btn-ink);border-color:var(--btn);font-weight:700}
+
+.editor{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 0}
+.editor input{width:84px;padding:5px 8px}
+.linkbtn{border:0;background:none;color:var(--prot);font-size:14px;font-weight:500;padding:4px 0}
+.plus{min-width:40px;height:36px;padding:0 10px;border-radius:8px;border:1px solid var(--btn);background:var(--btn);color:var(--btn-ink);font-size:16px;font-weight:700;font-family:var(--num)}
+details.more summary{cursor:pointer;color:var(--muted);font-size:14px;padding:6px 0}
+#subCard,#drinkCard{border-color:var(--ink)}
+
+/* AI box */
+.aibox{border-color:var(--ai);border-width:1.5px}
+.aibox h2{color:var(--ai)}
+.aistatus{font-size:14px;color:var(--ai)}
+.aires li{grid-template-columns:auto minmax(0,1fr) auto}
+.aires input[type=checkbox]{width:18px;height:18px;accent-color:var(--ai)}
+.aires .qin{width:58px;text-align:center;padding:4px 6px}
+.photo-name{font-size:13px;color:var(--muted)}
+.file-btn{position:relative;overflow:hidden}
+.file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.res{background:var(--surface);padding:12px 14px}
+.res .l{font-size:12px;color:var(--muted)}
+.res .n{font-size:34px;font-weight:600;line-height:1.1}
+.res .n small{font-size:15px;color:var(--muted);font-weight:500}
+.res .d{font-size:12px;color:var(--muted)}
+.warn{border-left:3px solid var(--over);padding:6px 10px;font-size:14px;background:var(--surface)}
+.note-box{font-size:13px;color:var(--muted)}
+
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--btn);color:var(--btn-ink);padding:8px 16px;border-radius:99px;font-size:14px;z-index:20;max-width:90vw}
+@media (prefers-reduced-motion:reduce){.fill{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>飲控計算機</h1>
+      <span class="sync" id="sync" role="status">載入中…</span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="分頁">
+      <button class="tab" role="tab" id="t-log" data-tab="log">今日記錄</button>
+      <button class="tab" role="tab" id="t-foods" data-tab="foods">食物庫</button>
+      <button class="tab" role="tab" id="t-goal" data-tab="goal">我的目標</button>
+    </nav>
+  </header>
+
+  <!-- 今日記錄 -->
+  <section class="view" id="view-log" role="tabpanel" aria-labelledby="t-log">
+    <div class="datenav">
+      <button class="icon-btn" id="prevDay" aria-label="前一天">‹</button>
+      <div class="when" id="dateLabel"></div>
+      <button class="icon-btn" id="nextDay" aria-label="後一天">›</button>
+    </div>
+
+    <div class="meters">
+      <div class="meter k" id="mk">
+        <div class="lab"><span>熱量</span><span>目標 <span class="num" id="kGoal">0</span> 大卡</span></div>
+        <div class="big num"><span id="kNow">0</span><small> 大卡</small></div>
+        <div class="track"><div class="fill" id="kBar"></div></div>
+        <div class="note" id="kNote"></div>
+      </div>
+      <div class="meter p" id="mp">
+        <div class="lab"><span>蛋白質</span><span>目標 <span class="num" id="pGoal">0</span> g</span></div>
+        <div class="big num"><span id="pNow">0</span><small> g</small></div>
+        <div class="track"><div class="fill" id="pBar"></div></div>
+        <div class="note" id="pNote"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-h"><h2>今天的保健食品</h2><button class="linkbtn" type="button" id="suppManage">新增或移除 ›</button></div>
+      <div class="supps" id="supps"></div>
+    </div>
+
+    <!-- AI 查詢 -->
+    <form class="card aibox" id="aiForm" hidden>
+      <div>
+        <h2 style="font-size:16px">問 Claude：吃了什麼？</h2>
+        <div class="small muted">直接打字，可以一次寫很多樣，例如「50嵐 四季春 大杯 微糖 加珍珠、一份滷肉飯」。拍營養標示也可以，數字會照標示算。</div>
+      </div>
+      <textarea id="aiText" rows="2" placeholder="例如：鼎泰豐 排骨蛋炒飯、可不可 熟成紅茶 大杯 無糖"></textarea>
+      <div class="btnrow">
+        <button class="btn ai" type="submit" id="aiGo">查熱量和蛋白質</button>
+        <span class="btn ghost sm file-btn" id="photoBtn" hidden>📷 附照片<input type="file" id="aiPhoto" accept="image/*" aria-label="附上食物或營養標示照片"></span>
+        <span class="photo-name" id="photoName"></span>
+        <button class="btn ghost sm" type="button" id="aiStop" hidden>停止</button>
+      </div>
+      <div class="aistatus" id="aiStatus" role="status"></div>
+      <div id="aiOut" hidden>
+        <ul class="rows aires" id="aiList"></ul>
+        <div class="btnrow" style="margin-top:10px">
+          <button class="btn" type="button" id="aiAdd">把勾選的加入這一天</button>
+          <button class="btn ghost" type="button" id="aiSave">勾選的也存進食物庫</button>
+        </div>
+        <div class="note-box" style="margin-top:8px">Claude 沒有上網，數字是依常見份量估的，連鎖店品項請對照官方。同一品項不同部位或尺寸會分開列出。有營養標示時以標示為準。</div>
+      </div>
+    </form>
+
+    <div>
+      <div class="sec-h"><h2>常吃，點一下加入</h2><span class="small muted">到食物庫按 ☆ 可以加進來</span></div>
+      <div class="quick" id="quick"></div>
+    </div>
+
+    <div>
+      <div class="sec-h"><h2>這天吃了什麼</h2><span class="small muted" id="itemCount"></span></div>
+      <ul class="rows" id="entries"></ul>
+    </div>
+
+    <div>
+      <div class="sec-h"><h2>近 7 天</h2><span class="small muted">點日期可切換</span></div>
+      <div class="week" id="week"></div>
+    </div>
+  </section>
+
+  <!-- 食物庫 -->
+  <section class="view" id="view-foods" role="tabpanel" aria-labelledby="t-foods" hidden>
+    <div>
+      <div class="field"><label for="q">搜尋食物</label><input type="text" id="q" placeholder="例如 乳清、雞胸、御飯糰"></div>
+      <div class="quick" id="cats" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card" id="subCard" hidden>
+      <div>
+        <h2 style="font-size:16px">Subway 嫩雞捲餅組合器</h2>
+        <div class="small muted">標準款 398 大卡、蛋白質 26g（營養師公布的圖表）。加料與去醬是用其他 Subway 品項反推的估計。</div>
+      </div>
+      <div class="supps" id="bOpts"></div>
+      <div class="sum-line">
+        <span><span class="num v-k" id="bK">0</span><span class="v-u">大卡</span></span>
+        <span><span class="num v-p" id="bP">0</span><span class="v-u">g 蛋白質</span></span>
+      </div>
+      <div class="btnrow"><button class="btn" id="bAdd" type="button">加入這一天</button><button class="star" id="bStar" type="button" aria-label="加到常吃">☆</button></div>
+    </div>
+
+    <div class="card" id="drinkCard" hidden>
+      <div>
+        <h2 style="font-size:16px">手搖飲組合器</h2>
+        <div class="small muted">熱量依營養師以 700ml 大杯計算的數字，各店會有差。蛋白質主要來自鮮奶，為估計。</div>
+      </div>
+      <div class="field"><span class="lbl">飲料</span><div class="seg" id="dBase"></div></div>
+      <div class="field"><span class="lbl">杯型</span><div class="seg" id="dSize"></div></div>
+      <div class="field"><span class="lbl">甜度</span><div class="seg" id="dSugar"></div></div>
+      <div class="field"><span class="lbl">加料</span><div class="supps" id="dTop"></div></div>
+      <div class="sum-line">
+        <span><span class="num v-k" id="dK">0</span><span class="v-u">大卡</span></span>
+        <span><span class="num v-p" id="dP">0</span><span class="v-u">g 蛋白質</span></span>
+      </div>
+      <div class="btnrow"><button class="btn" id="dAdd" type="button">加入這一天</button><button class="btn ghost sm" id="dSaveBtn" type="button">存成常喝</button></div>
+      <div class="small muted">存成常喝的飲料會列在下面，也會出現在今日頁。</div>
+    </div>
+
+    <form class="card" id="suppCard" hidden>
+      <div>
+        <h2 style="font-size:16px">保健食品</h2>
+        <div class="small muted">按「加入清單」後，會出現在今日記錄頁，每天打勾就好。劑量請以包裝為準。</div>
+      </div>
+      <div class="btnrow">
+        <input type="text" id="suppName" placeholder="其他保健品名稱" aria-label="保健品名稱" style="flex:1;min-width:140px;width:auto">
+        <input type="text" id="suppDose" placeholder="劑量" aria-label="劑量" style="width:90px">
+        <button class="btn ghost sm" type="submit">加入清單</button>
+      </div>
+    </form>
+    <ul class="rows" id="foodList"></ul>
+
+    <details class="more">
+    <summary>手動新增食物</summary>
+    <form class="card" id="customForm" style="margin-top:10px">
+      <div class="small muted">不確定數字的話，用「今日記錄」上方的「問 Claude」比較快。</div>
+      <div class="grid2">
+        <div class="field"><label for="cName">名稱</label><input type="text" id="cName" required></div>
+        <div class="field"><label for="cUnit">一份是</label><input type="text" id="cUnit" value="1份"></div>
+        <div class="field"><label for="cK">熱量（大卡）</label><input type="number" id="cK" min="0" step="0.1" inputmode="decimal" required></div>
+        <div class="field"><label for="cP">蛋白質（g）</label><input type="number" id="cP" min="0" step="0.1" inputmode="decimal" required></div>
+      </div>
+      <div class="btnrow">
+        <button class="btn" type="submit">存進食物庫</button>
+        <button class="btn ghost" type="button" id="cOnce">只加入這一天</button>
+      </div>
+    </form>
+    </details>
+  </section>
+
+  <!-- 我的目標 -->
+  <section class="view" id="view-goal" role="tabpanel" aria-labelledby="t-goal" hidden>
+    <div class="results" id="results"></div>
+    <div id="warns" style="display:flex;flex-direction:column;gap:8px"></div>
+
+    <div class="card">
+      <h2 style="font-size:16px">減脂力道</h2>
+      <div class="field">
+        <label for="gDef">每天少吃 <span class="num" id="gDefV" style="font-size:20px;color:var(--kcal)"></span> 大卡，約每週掉 <span class="num" id="gWk" style="font-size:20px;color:var(--kcal)"></span> kg</label>
+        <input type="range" id="gDef" min="0" max="1200" step="25">
+      </div>
+      <div class="seg" id="defPresets"></div>
+      <div class="field">
+        <label for="gPro">蛋白質每公斤體重 <span class="num" id="gProV" style="font-size:20px;color:var(--prot)"></span> g</label>
+        <input type="range" id="gPro" min="1.4" max="2.6" step="0.1">
+      </div>
+      <div class="note-box">一週掉體重 0.5–1% 算合理（你大約 0.35–0.7 kg）。赤字開越大，越需要高蛋白和持續重訓來保住肌肉。</div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:16px">活動量</h2>
+      <div class="field"><span class="lbl">每週重訓幾天</span><div class="seg" id="gDays"></div></div>
+      <div class="field"><span class="lbl">平常白天</span><div class="seg" id="gJob"></div></div>
+      <div class="field"><span class="lbl">每次訓練強度</span><div class="seg" id="gInt"></div></div>
+      <div class="note-box" id="actNote"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:16px">身體資料</h2>
+      <div class="grid2">
+        <div class="field"><label for="gSex">性別</label>
+          <select id="gSex"><option value="m">男</option><option value="f">女</option></select></div>
+        <div class="field"><label for="gAge">年齡</label><input type="number" id="gAge" min="10" max="90" inputmode="numeric"></div>
+        <div class="field"><label for="gH">身高（cm）</label><input type="number" id="gH" min="120" max="230" step="0.1" inputmode="decimal"></div>
+        <div class="field"><label for="gW">體重（kg）</label><input type="number" id="gW" min="30" max="250" step="0.1" inputmode="decimal"></div>
+      </div>
+      <div class="field"><label for="gBmr">基礎代謝（選填，有體組成儀報告就填這裡）</label>
+        <input type="number" id="gBmr" min="800" max="4000" inputmode="numeric" placeholder="留空則用公式估算"></div>
+    </div>
+  </section>
+</div>
+<div id="toast" role="status" hidden></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- 食物資料 ----------
+   src: label=包裝或官方標示 / ref=網路或媒體資料 / est=估計
+   kcal、p 都是「一份」的數字 */
+var CATS=['常吃','保健食品','BodyGoals','Subway','超商','早餐店','速食','手搖飲','零食','鍋貼炸物','其他'];
+var FOODS=[
+ /* BodyGoals */
+ {id:'bg-whey',cat:'BodyGoals',name:'BodyGoals 乳清蛋白飲（一般）',unit:'1包 31g',kcal:127,p:20.5,src:'ref',note:'各口味約 124–130 大卡、蛋白質 20–20.5g'},
+ {id:'bg-whey-pro',cat:'BodyGoals',name:'BodyGoals 乳清蛋白飲 PRO',unit:'1包 40g',kcal:170,p:27,src:'ref',note:'各口味約 159–177 大卡，取中間值'},
+ {id:'bg-pea',cat:'BodyGoals',name:'BodyGoals 全素豌豆蛋白飲',unit:'1包 31g',kcal:120,p:20,src:'ref',note:'約 110–130 大卡'},
+ {id:'bg-bar',cat:'BodyGoals',name:'BodyGoals Light 能量蛋白棒',unit:'1支',kcal:148,p:12,src:'ref',note:'官方標示每支小於 154 大卡'},
+ {id:'bg-chip',cat:'BodyGoals',name:'BodyGoals 高蛋白脆片',unit:'1包 45g',kcal:156,p:20,src:'ref'},
+ {id:'bg-soup',cat:'BodyGoals',name:'BodyGoals 高纖營養餐輕食餐',unit:'1包 29g',kcal:100,p:15,src:'ref',note:'標示「不到 100 大卡、最高 15g 蛋白質」，填上限值'},
+ {id:'bg-creatine',cat:'BodyGoals',name:'BodyGoals 水肌酸',unit:'1包 5g',kcal:0,p:0,src:'ref',note:'不含熱量，請在「保健食品」打勾記錄'},
+ /* Subway */
+ {id:'sub-wrap',cat:'Subway',name:'Subway 嫩雞沙拉捲餅（標準）',unit:'1份',kcal:398,p:26,src:'ref',note:'脂肪 17.8g、碳水 34g'},
+ {id:'sub-chicken',cat:'Subway',name:'Subway 加一份雞肉',unit:'1份',kcal:75,p:15,src:'est'},
+ {id:'sub-egg',cat:'Subway',name:'Subway 加蛋（煎蛋）',unit:'1份 45g',kcal:41,p:5,src:'ref'},
+ /* 超商：雞肉與蛋 */
+ {id:'chk-hot',cat:'超商',name:'21Plus 剝皮辣椒雞胸肉（增量）',unit:'1包 140g',kcal:163.3,p:30.2,src:'label',note:'鈉 503mg'},
+ {id:'chk-711herb',cat:'超商',name:'7-11 義式香草烤雞胸肉',unit:'1包',kcal:151,p:26.5,src:'ref'},
+ {id:'chk-dachan',cat:'超商',name:'大成 舒迷雞胸肉（日式塩糀）',unit:'1包',kcal:112,p:22,src:'label'},
+ {id:'chk-dachan711',cat:'超商',name:'大成 低溫舒迷雞胸肉（7-11）',unit:'1包',kcal:95,p:16.6,src:'est',note:'熱量估計'},
+ {id:'chk-cp',cat:'超商',name:'卜蜂 義式香草雞胸肉',unit:'1包',kcal:132,p:23,src:'label'},
+ {id:'chk-fami',cat:'超商',name:'全家 即食雞胸肉（原味）',unit:'1包',kcal:115,p:23,src:'est'},
+ {id:'gizzard',cat:'超商',name:'7-11 爆炒滷雞胗',unit:'1包',kcal:173,p:21.6,src:'ref'},
+ {id:'skewer',cat:'超商',name:'日式雞腿肉串燒',unit:'1包',kcal:140,p:19.3,src:'ref'},
+ {id:'skewer-teri',cat:'超商',name:'照燒雞腿肉串',unit:'1串',kcal:93,p:11.6,src:'ref'},
+ {id:'is-chicken',cat:'超商',name:'iselect 香辣大雞排',unit:'1片',kcal:300,p:30.9,src:'est',note:'熱量估計'},
+ {id:'is-leg',cat:'超商',name:'iselect 義式香草烤雞腿',unit:'1份',kcal:180,p:17.4,src:'est',note:'熱量估計'},
+ {id:'is-ball',cat:'超商',name:'iselect 辣味雞球',unit:'1包',kcal:210,p:17.1,src:'est',note:'熱量估計'},
+ {id:'sl-leg',cat:'超商',name:'松稜 糖燻雞腿',unit:'1支',kcal:170,p:16.4,src:'est',note:'熱量估計'},
+ {id:'duck',cat:'超商',name:'元進莊 鴨賞',unit:'1包',kcal:125,p:7.4,src:'ref'},
+ {id:'tea-egg',cat:'超商',name:'茶葉蛋',unit:'1顆',kcal:75,p:6.9,src:'ref'},
+ {id:'eggwhite',cat:'超商',name:'石安牧場 香滷蛋白丁',unit:'1包',kcal:33,p:6.6,src:'ref'},
+ {id:'onsen-egg',cat:'超商',name:'石安牧場 溫泉蛋',unit:'1盒 2顆',kcal:150,p:10.8,src:'est',note:'熱量估計'},
+ {id:'tuna-can',cat:'超商',name:'水煮鮪魚罐頭',unit:'1罐',kcal:144,p:25,src:'est',note:'油漬款約 277 大卡'},
+ {id:'sausage',cat:'超商',name:'大亨堡香腸／熱狗',unit:'1條',kcal:228,p:9.7,src:'ref'},
+ /* 超商：餐盒、麵飯 */
+ {id:'fm-bento',cat:'超商',name:'全家 健身G肉餐盒',unit:'1盒 385g',kcal:481,p:30,src:'label',note:'脂肪 10.4g、碳水 66.6g'},
+ {id:'711-chkveg',cat:'超商',name:'7-11 香烤雞胸鮮蔬餐',unit:'1盒',kcal:355,p:18.5,src:'ref'},
+ {id:'711-legveg',cat:'超商',name:'7-11 21Plus 香草烤雞腿時蔬餐',unit:'1盒',kcal:408,p:25.5,src:'ref'},
+ {id:'711-vegbento',cat:'超商',name:'7-11 繽紛鮮蔬烤雞便當',unit:'1盒',kcal:353,p:20.4,src:'ref'},
+ {id:'711-gyudon',cat:'超商',name:'7-11 真飽牛丼',unit:'1盒',kcal:703,p:20.9,src:'ref'},
+ {id:'711-risotto',cat:'超商',name:'7-11 黑松露野菇燉飯',unit:'1盒',kcal:535,p:10.5,src:'ref'},
+ {id:'711-clam',cat:'超商',name:'7-11 香蒜白酒蛤蠣義大利麵',unit:'1盒',kcal:418,p:16.5,src:'ref'},
+ {id:'711-mentai',cat:'超商',name:'7-11 鮮蝦明太子冷義大利麵',unit:'1盒',kcal:343,p:12.5,src:'ref'},
+ {id:'711-sausage-pasta',cat:'超商',name:'7-11 燻腸紅醬義大利麵',unit:'1盒',kcal:738,p:29.5,src:'ref'},
+ {id:'711-soba',cat:'超商',name:'7-11 日式蕎麥風味麵',unit:'1盒',kcal:320,p:13.3,src:'ref'},
+ {id:'bento-pork',cat:'超商',name:'排骨便當',unit:'1盒',kcal:750,p:28,src:'est'},
+ {id:'bento-leg',cat:'超商',name:'雞腿便當',unit:'1盒',kcal:800,p:35,src:'est'},
+ {id:'bento-lurou',cat:'超商',name:'滷肉飯便當',unit:'1盒',kcal:650,p:18,src:'est'},
+ /* 超商：飯糰、三明治、麵包 */
+ {id:'ong-pork',cat:'超商',name:'御飯糰 蔥鹽烤肉',unit:'1個',kcal:218,p:6.5,src:'ref'},
+ {id:'ong-mentai',cat:'超商',name:'御飯糰 明太子龍蝦',unit:'1個',kcal:214,p:6.7,src:'ref'},
+ {id:'ong-salmon',cat:'超商',name:'御飯糰 紅鮭',unit:'1個',kcal:192,p:5.9,src:'ref'},
+ {id:'ong-chicken',cat:'超商',name:'御飯糰 雞肉飯',unit:'1個',kcal:185,p:6.4,src:'ref'},
+ {id:'ong-korean',cat:'超商',name:'御飯糰 韓式烤肉',unit:'1個',kcal:179,p:4.5,src:'ref'},
+ {id:'ong-tuna',cat:'超商',name:'御飯糰 鮪魚',unit:'1個',kcal:200,p:6,src:'est'},
+ {id:'711-ricebgr',cat:'超商',name:'7-11 香草烤雞蛋飯堡',unit:'1個',kcal:324,p:15.9,src:'ref'},
+ {id:'711-nola',cat:'超商',name:'7-11 紐奧良風味鮮蔬烤雞三明治',unit:'1盒',kcal:291,p:12.4,src:'ref'},
+ {id:'711-mexwrap',cat:'超商',name:'7-11 火烤墨西哥風味雞肉捲',unit:'1個',kcal:316,p:12.8,src:'ref'},
+ {id:'sandwich-egg',cat:'超商',name:'雞蛋三明治',unit:'1盒',kcal:300,p:8,src:'est'},
+ {id:'fm-porkburger',cat:'超商',name:'全家 豬肉起司蛋堡',unit:'1個',kcal:280,p:15,src:'est'},
+ /* 超商：沙拉、蔬菜、澱粉 */
+ {id:'salad-yuzu',cat:'超商',name:'7-11 柚香和風嫩雞沙拉（不含醬）',unit:'1盒',kcal:150,p:16,src:'est'},
+ {id:'salad-scallion',cat:'超商',name:'7-11 蔥鹽烤雞沙拉（不含醬）',unit:'1盒',kcal:150,p:14,src:'est'},
+ {id:'salad-quinoa',cat:'超商',name:'7-11 紅藜嫩雞沙拉（不含醬）',unit:'1盒',kcal:170,p:11,src:'est'},
+ {id:'dressing',cat:'超商',name:'沙拉醬包',unit:'1包',kcal:60,p:0.5,src:'est',note:'和風約 30–60、胡麻約 80–120'},
+ {id:'potato',cat:'超商',name:'現蒸地瓜',unit:'100g',kcal:124,p:1.3,src:'ref',note:'中型一條約 120–170g'},
+ {id:'edamame',cat:'超商',name:'鹽味毛豆',unit:'1包 約100g',kcal:125,p:11,src:'est'},
+ {id:'miso',cat:'超商',name:'豆腐海帶芽味噌湯',unit:'1杯',kcal:40,p:3,src:'est'},
+ /* 超商：關東煮（熱量來自營養師整理，蛋白質估計） */
+ {id:'od-ricecake',cat:'超商',name:'關東煮 豬血糕',unit:'1串',kcal:127,p:3,src:'ref',note:'蛋白質估計'},
+ {id:'od-heilun',cat:'超商',name:'關東煮 黑輪',unit:'1串',kcal:117,p:5,src:'ref',note:'蛋白質估計'},
+ {id:'od-gongwan',cat:'超商',name:'關東煮 豬肉貢丸',unit:'1份',kcal:98,p:5,src:'ref',note:'蛋白質估計'},
+ {id:'od-tempura',cat:'超商',name:'關東煮 甜不辣',unit:'1份',kcal:93,p:4,src:'ref',note:'蛋白質估計'},
+ {id:'od-fishball',cat:'超商',name:'關東煮 虱目魚丸',unit:'1份',kcal:80,p:5,src:'ref',note:'蛋白質估計'},
+ {id:'od-chikuwa',cat:'超商',name:'關東煮 竹輪',unit:'1根',kcal:53,p:3,src:'ref',note:'蛋白質估計'},
+ {id:'od-corn',cat:'超商',name:'關東煮 玉米',unit:'1段',kcal:90,p:3,src:'est'},
+ {id:'od-radish',cat:'超商',name:'關東煮 白蘿蔔',unit:'1塊',kcal:15,p:0.5,src:'est'},
+ {id:'od-cabbage',cat:'超商',name:'關東煮 高麗菜捲',unit:'1個',kcal:40,p:2,src:'est'},
+ {id:'od-tofu',cat:'超商',name:'關東煮 油豆腐',unit:'1塊',kcal:80,p:6,src:'est'},
+ /* 超商：飲品 */
+ {id:'soy',cat:'超商',name:'無糖豆漿',unit:'約 400ml',kcal:140,p:13,src:'est'},
+ {id:'soy-uni',cat:'超商',name:'統一 陽光無糖高纖豆漿',unit:'1瓶 450ml',kcal:160,p:15.3,src:'ref'},
+ {id:'soy-kq',cat:'超商',name:'光泉 無糖濃豆奶',unit:'1瓶',kcal:186,p:19.6,src:'ref',note:'由營養師組合數字推算'},
+ {id:'soy-milk',cat:'超商',name:'光泉 無加糖鮮奶豆漿',unit:'1瓶',kcal:200,p:15,src:'est',note:'熱量估計'},
+ {id:'milk-low',cat:'超商',name:'低脂鮮奶',unit:'290ml',kcal:135,p:9,src:'est'},
+ {id:'milk-full',cat:'超商',name:'全脂鮮奶',unit:'290ml',kcal:185,p:9,src:'est'},
+ {id:'yogurt-gk',cat:'超商',name:'希臘優格（無糖）',unit:'1杯 約100g',kcal:90,p:9,src:'est'},
+ {id:'tea-bottle',cat:'超商',name:'瓶裝無糖茶',unit:'1瓶',kcal:0,p:0,src:'ref'},
+ {id:'americano',cat:'超商',name:'美式咖啡',unit:'1杯',kcal:10,p:0.5,src:'est'},
+ {id:'latte-m',cat:'超商',name:'拿鐵（中杯，鮮奶）',unit:'1杯',kcal:140,p:7,src:'est'},
+ {id:'latte-711',cat:'超商',name:'拿鐵（大杯，鮮奶）',unit:'1杯',kcal:200,p:10,src:'est'},
+ {id:'monster',cat:'超商',name:'Monster 能量飲（原味）',unit:'1罐 355ml',kcal:165,p:0,src:'est',note:'無糖款約 10 大卡'},
+ /* 麥當勞：兩個第三方整理表一致（來源標示為官方營養計算機），點餐時棒腿或大腿由門市決定 */
+ {id:'mc-crisp-drum',cat:'速食',name:'麥當勞 原味麥脆雞腿（棒腿）',unit:'1塊',kcal:275,p:18,src:'ref'},
+ {id:'mc-crisp-thigh',cat:'速食',name:'麥當勞 原味麥脆雞腿（大腿）',unit:'1塊',kcal:425,p:25,src:'ref'},
+ {id:'mc-spicy-drum',cat:'速食',name:'麥當勞 辣味麥脆雞腿（棒腿）',unit:'1塊',kcal:267,p:18,src:'ref'},
+ {id:'mc-spicy-thigh',cat:'速食',name:'麥當勞 辣味麥脆雞腿（大腿）',unit:'1塊',kcal:447,p:23,src:'ref'},
+ {id:'mc-nug4',cat:'速食',name:'麥當勞 麥克雞塊 4 塊',unit:'1份',kcal:174,p:10,src:'ref',note:'另一來源寫 170／9'},
+ {id:'mc-nug6',cat:'速食',name:'麥當勞 麥克雞塊 6 塊',unit:'1份',kcal:261,p:16,src:'ref'},
+ {id:'mc-nug10',cat:'速食',name:'麥當勞 麥克雞塊 10 塊',unit:'1份',kcal:436,p:26,src:'ref'},
+ {id:'mc-fry-s',cat:'速食',name:'麥當勞 薯條（小）',unit:'1份',kcal:241,p:3.7,src:'ref'},
+ {id:'mc-fry-m',cat:'速食',name:'麥當勞 薯條（中）',unit:'1份',kcal:346,p:5.3,src:'ref'},
+ {id:'mc-fry-l',cat:'速食',name:'麥當勞 薯條（大）',unit:'1份',kcal:473,p:7.4,src:'ref'},
+ {id:'mc-wing2',cat:'速食',name:'麥當勞 勁辣香雞翅 2 塊',unit:'1份',kcal:250,p:12,src:'ref'},
+ {id:'mc-spicyburger',cat:'速食',name:'麥當勞 勁辣雞腿堡',unit:'1個',kcal:537,p:23,src:'ref'},
+ /* 零食 */
+ {id:'chips',cat:'零食',name:'洋芋片',unit:'1小包 約34g',kcal:180,p:2,src:'est'},
+ {id:'nuts',cat:'零食',name:'綜合堅果',unit:'1小包 約25g',kcal:150,p:5,src:'est'},
+ {id:'jerky',cat:'零食',name:'牛肉乾',unit:'約30g',kcal:100,p:10,src:'est'},
+ {id:'squid',cat:'零食',name:'魷魚絲',unit:'約30g',kcal:95,p:12,src:'est'},
+ {id:'seaweed',cat:'零食',name:'海苔',unit:'1小包',kcal:20,p:1,src:'est'},
+ {id:'choco',cat:'零食',name:'巧克力',unit:'1小塊 約12g',kcal:65,p:1,src:'est'},
+ {id:'popcorn',cat:'零食',name:'爆米花（奶油）',unit:'1小包 約30g',kcal:150,p:2,src:'est'},
+ {id:'cookie',cat:'零食',name:'夾心餅乾',unit:'2片',kcal:100,p:1,src:'est'},
+ {id:'icecream',cat:'零食',name:'冰淇淋',unit:'1支',kcal:200,p:3,src:'est'},
+ {id:'konjac',cat:'零食',name:'蒟蒻果凍',unit:'1個',kcal:15,p:0,src:'est'},
+ /* 鍋貼炸物 */
+ {id:'gt',cat:'鍋貼炸物',name:'八方雲集 招牌鍋貼',unit:'1顆',kcal:64,p:2.5,src:'est',defQty:8,step:1,note:'熱量由官方每 100g 214 大卡換算'},
+ {id:'pld-boneless',cat:'鍋貼炸物',name:'胖老爹 無骨雞腿排',unit:'1份',kcal:600,p:35,src:'est'},
+ {id:'pld-leg',cat:'鍋貼炸物',name:'胖老爹 炸雞腿',unit:'1支',kcal:350,p:22,src:'est'},
+ {id:'pld-nugget',cat:'鍋貼炸物',name:'胖老爹 炸雞塊',unit:'1份',kcal:300,p:20,src:'est'},
+ {id:'pld-wing',cat:'鍋貼炸物',name:'雞翅（炸）',unit:'1支 85g',kcal:320,p:14,src:'est'},
+ /* 早餐店：大多為陽明交大校內早餐店營養分析（有秤重），各店份量會有差 */
+ {id:'bk-plain',cat:'早餐店',name:'原味蛋餅',unit:'1份',kcal:216,p:10.3,src:'ref'},
+ {id:'bk-cheese',cat:'早餐店',name:'起司蛋餅',unit:'1份',kcal:259,p:12.8,src:'ref'},
+ {id:'bk-ham',cat:'早餐店',name:'火腿蛋餅',unit:'1份',kcal:265,p:15.6,src:'ref'},
+ {id:'bk-corn',cat:'早餐店',name:'玉米蛋餅',unit:'1份',kcal:285,p:13.7,src:'ref'},
+ {id:'bk-bacon',cat:'早餐店',name:'培根蛋餅',unit:'1份',kcal:295,p:13.2,src:'ref'},
+ {id:'bk-porkloin-eb',cat:'早餐店',name:'里肌豬排蛋餅',unit:'1份',kcal:292,p:18.6,src:'ref'},
+ {id:'bk-floss',cat:'早餐店',name:'肉鬆蛋餅',unit:'1份',kcal:308,p:14.1,src:'ref'},
+ {id:'bk-hash-eb',cat:'早餐店',name:'薯餅蛋餅',unit:'1份',kcal:325,p:11.4,src:'ref'},
+ {id:'bk-hotdog-eb',cat:'早餐店',name:'熱狗蛋餅',unit:'1份',kcal:335,p:13.5,src:'ref'},
+ {id:'bk-tuna',cat:'早餐店',name:'鮪魚蛋餅',unit:'1份',kcal:360,p:23.5,src:'ref'},
+ {id:'bk-ham-toast',cat:'早餐店',name:'火腿蛋吐司',unit:'1份',kcal:432,p:18.8,src:'ref'},
+ {id:'bk-porkloin-toast',cat:'早餐店',name:'里肌豬排蛋吐司',unit:'1份',kcal:460,p:21.8,src:'ref'},
+ {id:'bk-bacon-toast',cat:'早餐店',name:'培根蛋吐司',unit:'1份',kcal:463,p:16.4,src:'ref'},
+ {id:'bk-floss-toast',cat:'早餐店',name:'肉鬆蛋吐司',unit:'1份',kcal:476,p:17.3,src:'ref'},
+ {id:'bk-tuna-toast',cat:'早餐店',name:'鮪魚蛋吐司',unit:'1份',kcal:527,p:26.7,src:'ref'},
+ {id:'bk-karaage-toast',cat:'早餐店',name:'卡啦雞腿蛋吐司',unit:'1份',kcal:761,p:27.6,src:'ref'},
+ {id:'bk-club',cat:'早餐店',name:'總匯吐司／總匯三明治',unit:'1份',kcal:783,p:30.5,src:'ref'},
+ {id:'bk-choco',cat:'早餐店',name:'巧克力厚片',unit:'1片',kcal:242,p:7.6,src:'ref'},
+ {id:'bk-peanut',cat:'早餐店',name:'花生厚片',unit:'1片',kcal:240,p:9.2,src:'ref'},
+ {id:'bk-butter',cat:'早餐店',name:'奶油厚片',unit:'1片',kcal:252,p:7.1,src:'ref'},
+ {id:'bk-straw',cat:'早餐店',name:'草莓厚片',unit:'1片',kcal:200,p:7.1,src:'ref'},
+ {id:'bk-garlic',cat:'早餐店',name:'香蒜厚片',unit:'1片',kcal:257,p:7.4,src:'ref'},
+ {id:'bk-porkloin-bgr',cat:'早餐店',name:'里肌豬排蛋堡',unit:'1個',kcal:436,p:21.6,src:'ref'},
+ {id:'bk-bacon-bgr',cat:'早餐店',name:'培根蛋堡',unit:'1個',kcal:438,p:16.2,src:'ref'},
+ {id:'bk-chick-bgr',cat:'早餐店',name:'香雞排蛋堡',unit:'1個',kcal:458,p:18.1,src:'ref'},
+ {id:'bk-pork-bgr',cat:'早餐店',name:'豬肉蛋堡',unit:'1個',kcal:493,p:17.4,src:'ref'},
+ {id:'bk-tuna-bgr',cat:'早餐店',name:'鮪魚蛋堡',unit:'1個',kcal:503,p:26.5,src:'ref'},
+ {id:'bk-chicken',cat:'早餐店',name:'卡啦雞腿堡',unit:'1個',kcal:737,p:27.4,src:'ref'},
+ {id:'bk-noodle-pep',cat:'早餐店',name:'鐵板麵（黑胡椒）',unit:'1份',kcal:398,p:13.6,src:'ref'},
+ {id:'bk-noodle-mush',cat:'早餐店',name:'鐵板麵（蘑菇／義大利醬）',unit:'1份',kcal:727,p:17.3,src:'ref',note:'醬多油多，熱量差很多'},
+ {id:'bk-scallion',cat:'早餐店',name:'蔥抓餅',unit:'1片',kcal:273,p:7.7,src:'ref'},
+ {id:'bk-scallion-egg',cat:'早餐店',name:'蔥抓餅加蛋',unit:'1片',kcal:361,p:13.7,src:'ref'},
+ {id:'bk-turnip',cat:'早餐店',name:'蘿蔔糕',unit:'2片',kcal:214,p:4,src:'ref',note:'熱量來自台大熱量表，蛋白質估計'},
+ {id:'bk-nugget',cat:'早餐店',name:'雞塊',unit:'1份 約115g',kcal:245,p:17.4,src:'ref'},
+ {id:'bk-hotdog',cat:'早餐店',name:'熱狗',unit:'1條',kcal:179,p:4.9,src:'ref'},
+ {id:'bk-hash',cat:'早餐店',name:'薯餅',unit:'1片',kcal:109,p:1.1,src:'ref'},
+ {id:'bk-egg',cat:'早餐店',name:'荷包蛋（加蛋）',unit:'1顆',kcal:88,p:6,src:'ref'},
+ {id:'bk-purple',cat:'早餐店',name:'紫米飯糰',unit:'1個',kcal:317,p:8,src:'ref',note:'熱量來自台大熱量表，蛋白質估計'},
+ {id:'bk-onigiri',cat:'早餐店',name:'傳統飯糰（油條、肉鬆、蛋）',unit:'1個',kcal:500,p:12,src:'est'},
+ {id:'bk-shaobing',cat:'早餐店',name:'燒餅油條',unit:'1份',kcal:450,p:11,src:'est'},
+ {id:'bk-shuijian',cat:'早餐店',name:'水煎包',unit:'1顆',kcal:180,p:6,src:'est'},
+ {id:'bk-xlb',cat:'早餐店',name:'小籠包',unit:'1顆',kcal:50,p:2.5,src:'est',defQty:8,step:1},
+ {id:'bk-gyoza',cat:'早餐店',name:'煎餃',unit:'1顆',kcal:60,p:2.5,src:'est',defQty:10,step:1},
+ {id:'bk-milktea',cat:'早餐店',name:'奶茶（中杯）',unit:'約 350ml',kcal:300,p:6,src:'ref'},
+ {id:'bk-blacktea',cat:'早餐店',name:'紅茶（中杯，有糖）',unit:'約 350ml',kcal:186,p:0,src:'ref'},
+ {id:'bk-greentea',cat:'早餐店',name:'綠茶（中杯，有糖）',unit:'約 350ml',kcal:150,p:0,src:'ref'},
+ {id:'bk-soy',cat:'早餐店',name:'豆漿（有糖）',unit:'約 330ml',kcal:201,p:12.2,src:'ref'},
+ {id:'bk-soy0',cat:'早餐店',name:'無糖豆漿',unit:'約 330ml',kcal:120,p:10.8,src:'ref'},
+ {id:'bk-rice-milk',cat:'早餐店',name:'米漿',unit:'約 330ml',kcal:214,p:3.6,src:'ref'},
+ /* 其他 */
+ {id:'egg',cat:'其他',name:'水煮蛋',unit:'1顆',kcal:75,p:6.5,src:'est'},
+ {id:'rice',cat:'其他',name:'白飯',unit:'1碗',kcal:280,p:5,src:'est'}
+];
+var SRC={label:'標示',ref:'資料',est:'估計',mine:'你改的'};
+
+/* Subway 組合器 */
+var BASE={kcal:398,p:26};
+var BOPTS=[
+ {id:'double',name:'雞肉加倍',kcal:75,p:15,on:true},
+ {id:'egg',name:'多加一份蛋',kcal:41,p:5,on:true},
+ {id:'nosauce',name:'不加醬',kcal:-50,p:0,on:true,short:'無醬'}
+];
+
+/* 手搖飲組合器：700ml 大杯數字（元氣網 營養師整理） */
+var DBASE=[
+ {id:'tea',name:'純茶',kcal:0,p:0},
+ {id:'milktea',name:'鮮奶茶',kcal:185,p:7},
+ {id:'creamer',name:'奶精奶茶',kcal:290,p:1},
+ {id:'milk',name:'鮮奶',kcal:336,p:20},
+ {id:'yakult',name:'多多綠茶',kcal:135,p:2},
+ {id:'soytea',name:'豆漿紅茶',kcal:120,p:9}
+];
+var DSIZE=[{id:'L',name:'大杯 700ml',f:1},{id:'M',name:'中杯 500ml',f:0.72}];
+var DSUGAR=[{id:'0',name:'無糖',kcal:0},{id:'1',name:'一分',kcal:20},{id:'3',name:'微糖',kcal:65},{id:'5',name:'半糖',kcal:130},{id:'7',name:'少糖',kcal:160},{id:'10',name:'全糖',kcal:210}];
+var DTOP=[
+ {id:'pearl',name:'珍珠',kcal:175,p:0.5},{id:'coco',name:'椰果',kcal:78,p:0},{id:'pudding',name:'布丁',kcal:110,p:2},
+ {id:'grass',name:'仙草',kcal:40,p:0},{id:'agar',name:'寒天',kcal:35,p:0},{id:'almond',name:'杏仁凍',kcal:95,p:1},
+ {id:'foam',name:'奶蓋',kcal:210,p:2},{id:'ice',name:'冰淇淋',kcal:180,p:3}
+];
+var DS={base:'tea',size:'L',sugar:'0',tops:{}};
+
+/* 預設保健品（DHC 份量依松本清網頁「60日份」推算） */
+var DEF_SUPPS=[
+ {id:'creatine',name:'水肌酸',dose:'5g',kcal:0,p:0},
+ {id:'dhc-multi',name:'DHC 綜合維他命',dose:'1粒',kcal:0,p:0},
+ {id:'dhc-d',name:'DHC 維他命D',dose:'1粒',kcal:0,p:0},
+ {id:'dhc-dha',name:'DHC 精製魚油DHA',dose:'4粒',kcal:15,p:0.5},
+ {id:'dhc-iron',name:'DHC 紅嫩鐵素',dose:'2粒',kcal:0,p:0}
+];
+
+/* 保健食品目錄：按「加入清單」才會出現在每日打勾 */
+var SUPP_CAT=[
+ {id:'creatine',name:'水肌酸',dose:'5g',note:'每天固定吃，不用挑時間'},
+ {id:'dhc-multi',name:'DHC 綜合維他命',dose:'1粒'},
+ {id:'dhc-d',name:'DHC 維他命D',dose:'1粒',note:'25µg（1000 IU），跟餐吃'},
+ {id:'dhc-dha',name:'DHC 精製魚油DHA',dose:'4粒',kcal:15,p:0.5,note:'4 粒約 15 大卡，會算進總熱量'},
+ {id:'dhc-iron',name:'DHC 紅嫩鐵素',dose:'2粒',note:'男性通常不缺鐵，沒抽血確認過不建議長期吃'},
+ {id:'magnesium',name:'鎂（檸檬酸鎂／甘胺酸鎂）',dose:'200–400mg',note:'睡前吃；氧化鎂較易拉肚子'},
+ {id:'maca',name:'瑪卡',dose:'1.5–3g',note:'依包裝；對增肌或睪固酮沒有可靠證據'},
+ {id:'zinc',name:'鋅',dose:'15mg',note:'不要長期超過 40mg'},
+ {id:'bcomplex',name:'B群',dose:'1粒',note:'早上吃，尿液變黃是正常的'},
+ {id:'vitc',name:'維他命C',dose:'500mg'},
+ {id:'probiotic',name:'益生菌',dose:'1包'}
+];
+function suppIn(id){return S.profile.supps.some(function(s){return s.id===id})}
+function toggleSuppList(item){
+  if(suppIn(item.id))S.profile.supps=S.profile.supps.filter(function(s){return s.id!==item.id});
+  else S.profile.supps.push({id:item.id,name:item.name,dose:item.dose||'',kcal:item.kcal||0,p:item.p||0});
+  saveProfile();renderLog();renderFoodList();
+}
+
+/* 活動量 */
+var JOBS=[{id:'sit',name:'多半坐著',f:1.2},{id:'mix',name:'坐站各半',f:1.28},{id:'move',name:'常走動站立',f:1.38},{id:'labor',name:'體力活',f:1.5}];
+var INTS=[{id:'light',name:'輕鬆',f:0.025},{id:'mid',name:'一般',f:0.035},{id:'hard',name:'很操',f:0.045}];
+var DEF_PRESETS=[300,500,700,900,1100];
+
+/* ---------- 狀態 ---------- */
+var DEF={sex:'m',age:29,height:170,weight:71.8,bmr:null,deficit:500,ppk:2.0,
+  days:5,job:'mix',intensity:'mid',suppV:3,
+  supps:clone(DEF_SUPPS),
+  edits:{},
+  pins:['sub-combo','bg-whey-pro','bg-whey','chk-hot','soy-uni','tea-egg']};
+var S={tab:'log',date:todayStr(),profile:clone(DEF),foods:[],days:{},db:null,cat:'常吃',q:'',sample:null,canImg:false};
+
+function clone(o){return JSON.parse(JSON.stringify(o))}
+function pad(n){return String(n).padStart(2,'0')}
+function ymd(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function todayStr(){return ymd(new Date())}
+function parseYmd(s){var a=s.split('-').map(Number);return new Date(a[0],a[1]-1,a[2])}
+function shift(s,n){var d=parseYmd(s);d.setDate(d.getDate()+n);return ymd(d)}
+function fmt(n){return String(Math.round(n*10)/10)}
+function num(v,d){v=Number(v);return isFinite(v)?v:d}
+var WD=['日','一','二','三','四','五','六'];
+function $(s){return document.querySelector(s)}
+function h(tag,props){
+  var e=document.createElement(tag),k,v,kids=Array.prototype.slice.call(arguments,2);
+  props=props||{};
+  for(k in props){v=props[k];
+    if(k==='class')e.className=v;
+    else if(k==='text')e.textContent=v;
+    else if(k.indexOf('on')===0)e.addEventListener(k.slice(2),v);
+    else if(v===true)e.setAttribute(k,'');
+    else if(v!==false&&v!=null)e.setAttribute(k,v);
+  }
+  kids.forEach(function add(c){
+    if(c==null||c===false)return;
+    if(Array.isArray(c)){c.forEach(add);return}
+    e.append(c.nodeType?c:document.createTextNode(c));
+  });
+  return e;
+}
+function migrate(raw){
+  var p=Object.assign(clone(DEF),raw||{});
+  if(raw&&!(raw.suppV>=3)){
+    var have={};(p.supps||[]).forEach(function(s){have[s.id]=1});
+    DEF_SUPPS.forEach(function(s){if(!have[s.id])p.supps.push(clone(s))});
+    p.suppV=3;
+  }
+  if(!Array.isArray(p.pins))p.pins=clone(DEF.pins);
+  if(!p.edits||typeof p.edits!=='object')p.edits={};
+  return p;
+}
+
+/* ---------- 計算 ---------- */
+function actFactor(p){
+  var j=JOBS.filter(function(x){return x.id===p.job})[0]||JOBS[1];
+  var it=INTS.filter(function(x){return x.id===p.intensity})[0]||INTS[1];
+  return Math.round((j.f+p.days*it.f)*1000)/1000;
+}
+function calc(p){
+  p=p||S.profile;
+  var base=10*p.weight+6.25*p.height-5*p.age+(p.sex==='f'?-161:5);
+  var manual=p.bmr&&p.bmr>0;
+  var bmr=manual?p.bmr:base;
+  var af=actFactor(p);
+  var tdee=bmr*af;
+  var target=Math.round(tdee-p.deficit);
+  var protein=Math.round(p.weight*p.ppk);
+  var fat=Math.round(p.weight*0.8);
+  var carbs=Math.max(0,Math.round((target-protein*4-fat*9)/4));
+  return {bmr:Math.round(bmr),manual:!!manual,af:af,tdee:Math.round(tdee),target:target,protein:protein,fat:fat,carbs:carbs,
+    pct:tdee>0?p.deficit/tdee:0,wk:p.deficit*7/7700};
+}
+function getDay(d){
+  var x=S.days[d];
+  if(!x)return {date:d,items:[],taken:{}};
+  return {date:d,items:x.items||[],taken:x.taken||{}};
+}
+function totals(day){
+  var k=0,p=0;
+  day.items.forEach(function(i){k+=i.kcal*i.qty;p+=i.p*i.qty});
+  S.profile.supps.forEach(function(s){if(day.taken[s.id]){k+=num(s.kcal,0);p+=num(s.p,0)}});
+  return {kcal:k,p:p};
+}
+
+/* ---------- 儲存 ---------- */
+var LS={
+  get:function(k){try{var v=localStorage.getItem(k);return v?JSON.parse(v):null}catch(e){return null}},
+  set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+var pend=new Map(),busy=new Set();
+function cloudSet(path,data){
+  pend.set(path,data);setSync('wait');
+  if(busy.has(path))return;
+  busy.add(path);
+  (async function(){
+    try{
+      while(pend.has(path)){
+        await new Promise(function(r){setTimeout(r,300)});
+        var d=pend.get(path);pend.delete(path);
+        await S.db.doc(path).set(d);
+      }
+      setSync('cloud');
+    }catch(e){setSync('error')}
+    finally{busy.delete(path)}
+  })();
+}
+function saveDay(d){
+  var day=getDay(d);
+  var doc={date:d,items:day.items,taken:day.taken};
+  S.days[d]=doc;
+  if(S.db)cloudSet('days/'+d,doc);else LS.set('dc:day:'+d,doc);
+}
+function saveProfile(){
+  if(S.db)cloudSet('profile/me',S.profile);else LS.set('dc:profile',S.profile);
+}
+function saveFood(f){
+  if(S.db)cloudSet('foods/'+f.id,f);
+  else{var all=(LS.get('dc:foods')||[]).filter(function(x){return x.id!==f.id});all.push(f);LS.set('dc:foods',all)}
+}
+function removeFood(id){
+  S.foods=S.foods.filter(function(x){return x.id!==id});
+  S.profile.pins=S.profile.pins.filter(function(x){return x!==id});saveProfile();
+  if(S.db){S.db.doc('foods/'+id).delete().catch(function(){setSync('error')})}
+  else LS.set('dc:foods',S.foods);
+}
+function setSync(s){
+  var t={cloud:'已同步到雲端',local:'只存在這台裝置',wait:'同步中…',error:'同步失敗，稍後會再試',slow:'還沒連上雲端，先顯示已有資料'}[s]||'';
+  $('#sync').textContent=t;
+}
+var toastT;
+function toast(msg){
+  var t=$('#toast');t.textContent=msg;t.hidden=false;
+  clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true},1800);
+}
+
+/* ---------- 記錄 ---------- */
+function newId(p){return (p||'i')+Date.now().toString(36)+Math.random().toString(36).slice(2,5)}
+function addEntry(item,qty,silent){
+  var date=S.date,day=getDay(date);
+  var found=day.items.filter(function(i){return i.name===item.name&&i.unit===(item.unit||'')&&i.kcal===item.kcal&&i.p===item.p})[0];
+  if(found)found.qty=Math.round((found.qty+qty)*10)/10;
+  else day.items.push({id:newId(),name:item.name,unit:item.unit||'',kcal:item.kcal,p:item.p,qty:qty,step:item.step||0.5});
+  S.days[date]={date:date,items:day.items,taken:day.taken};
+  saveDay(date);renderLog();
+  if(!silent)toast('已加入 '+item.name+(qty!==1?' × '+fmt(qty):''));
+}
+function mutateDay(fn){
+  var day=getDay(S.date);fn(day);
+  S.days[S.date]={date:S.date,items:day.items,taken:day.taken};
+  saveDay(S.date);renderLog();
+}
+function bump(id,delta){mutateDay(function(day){
+  var it=day.items.filter(function(i){return i.id===id})[0];if(!it)return;
+  it.qty=Math.round((it.qty+delta)*10)/10;
+  if(it.qty<=0)day.items=day.items.filter(function(i){return i.id!==id});
+})}
+function dropEntry(id){mutateDay(function(day){day.items=day.items.filter(function(i){return i.id!==id})})}
+function toggleSupp(id,on){mutateDay(function(day){day.taken[id]=on})}
+
+/* ---------- 食物查找 ---------- */
+function subwayCalc(){
+  var k=BASE.kcal,p=BASE.p,parts=[];
+  BOPTS.forEach(function(o){if(o.on){k+=o.kcal;p+=o.p;parts.push(o.short||o.name)}});
+  return {kcal:k,p:p,name:'Subway 嫩雞捲餅'+(parts.length?'（'+parts.join('、')+'）':''),unit:'1份'};
+}
+function drinkCalc(){
+  var b=DBASE.filter(function(x){return x.id===DS.base})[0];
+  var sz=DSIZE.filter(function(x){return x.id===DS.size})[0];
+  var sg=DSUGAR.filter(function(x){return x.id===DS.sugar})[0];
+  var k=(b.kcal+sg.kcal)*sz.f,p=b.p*sz.f,tops=[];
+  DTOP.forEach(function(t){if(DS.tops[t.id]){k+=t.kcal;p+=t.p;tops.push(t.name)}});
+  return {kcal:Math.round(k),p:Math.round(p*10)/10,unit:'1杯',
+    name:b.name+' '+sz.name.slice(0,2)+' '+sg.name+(tops.length?' 加'+tops.join('、'):'')};
+}
+function withEdit(f){
+  var e=S.profile.edits&&S.profile.edits[f.id];
+  if(!e)return f;
+  var g=Object.assign({},f);
+  g.orig={kcal:f.kcal,p:f.p,src:f.src};
+  g.kcal=num(e.kcal,f.kcal);g.p=num(e.p,f.p);g.src='mine';
+  return g;
+}
+function allFoods(){
+  return FOODS.map(withEdit).concat(S.foods.map(function(f){return {id:f.id,cat:f.cat||'自訂',name:f.name,unit:f.unit||'1份',kcal:num(f.kcal,0),p:num(f.p,0),src:f.src||'est',custom:1,note:f.note||''}}));
+}
+function foodById(id){
+  if(id==='sub-combo'){var s=subwayCalc();return {id:id,name:'Subway 我的組合',unit:s.unit,kcal:s.kcal,p:s.p,real:s.name}}
+  return allFoods().filter(function(f){return f.id===id})[0];
+}
+function isPinned(id){return S.profile.pins.indexOf(id)>=0}
+function togglePin(id){
+  var p=S.profile.pins;
+  if(isPinned(id))S.profile.pins=p.filter(function(x){return x!==id});else p.push(id);
+  saveProfile();renderQuick();renderFoodList();renderStar();
+}
+
+/* ---------- 畫面：今日 ---------- */
+function shortName(n){return n.replace('BodyGoals ','').replace('乳清蛋白飲','乳清')}
+function renderQuick(){
+  var box=$('#quick');box.replaceChildren();
+  S.profile.pins.forEach(function(id){
+    var f=foodById(id);if(!f)return;
+    box.append(h('button',{class:'chip',type:'button',onclick:function(){
+      addEntry({name:f.real||f.name,unit:f.unit,kcal:f.kcal,p:f.p,step:f.step},f.defQty||1);
+    }},shortName(f.name),h('span',{class:'s',text:fmt(f.kcal)+' 大卡'})));
+  });
+  box.append(h('button',{class:'chip',type:'button',onclick:function(){go('foods')}},'更多食物 ›'));
+}
+
+function renderLog(){
+  var c=calc(),day=getDay(S.date),t=totals(day),isToday=S.date===todayStr();
+  var d=parseYmd(S.date);
+  var lab=$('#dateLabel');lab.replaceChildren((d.getMonth()+1)+'月'+d.getDate()+'日 週'+WD[d.getDay()]);
+  if(isToday)lab.append(h('span',{class:'pill',text:'今天'}));
+  $('#nextDay').disabled=S.date>=todayStr();
+
+  $('#kNow').textContent=Math.round(t.kcal);$('#kGoal').textContent=c.target;
+  $('#kBar').style.width=Math.min(100,t.kcal/Math.max(1,c.target)*100)+'%';
+  var kl=c.target-t.kcal;
+  $('#mk').classList.toggle('over',kl<0);
+  $('#kNote').textContent=kl>=0?'還能吃 '+Math.round(kl)+' 大卡':'超出 '+Math.round(-kl)+' 大卡';
+  $('#pNow').textContent=fmt(t.p);$('#pGoal').textContent=c.protein;
+  $('#pBar').style.width=Math.min(100,t.p/Math.max(1,c.protein)*100)+'%';
+  var pl=c.protein-t.p;
+  $('#pNote').textContent=pl>0?'還差 '+fmt(pl)+' g':'達標 ✓';
+
+  var ul=$('#entries');ul.replaceChildren();
+  $('#itemCount').textContent=day.items.length?day.items.length+' 項':'';
+  if(!day.items.length)ul.append(h('li',{class:'empty',style:'display:block'},'還沒有記錄。點上面的常吃、問 Claude，或到「食物庫」挑。'));
+  day.items.forEach(function(i){
+    var step=i.step||0.5;
+    ul.append(h('li',null,
+      h('div',null,h('div',{class:'nm',text:i.name}),h('div',{class:'meta',text:(i.unit?'每'+i.unit+' ':'')+fmt(i.kcal)+' 大卡 · '+fmt(i.p)+'g'})),
+      h('div',{class:'vals'},
+        h('span',{class:'num v-k'},String(Math.round(i.kcal*i.qty)),h('span',{class:'v-u',text:'大卡'})),
+        h('span',{class:'num v-p'},fmt(i.p*i.qty),h('span',{class:'v-u',text:'g'}))),
+      h('div',{class:'ctrl',style:'grid-column:1/-1'},
+        h('button',{class:'step',type:'button','aria-label':'減少',onclick:function(){bump(i.id,-step)}},'−'),
+        h('span',{class:'qty',text:'× '+fmt(i.qty)}),
+        h('button',{class:'step',type:'button','aria-label':'增加',onclick:function(){bump(i.id,step)}},'+'),
+        h('button',{class:'x',type:'button','aria-label':'刪除 '+i.name,onclick:function(){dropEntry(i.id)}},'×'))));
+  });
+
+  var sp=$('#supps');sp.replaceChildren();
+  var done=0;
+  S.profile.supps.forEach(function(s){
+    var on=!!day.taken[s.id];if(on)done++;
+    var cb=h('input',{type:'checkbox',id:'s-'+s.id,onchange:function(e){toggleSupp(s.id,e.target.checked)}});
+    cb.checked=on;
+    sp.append(h('label',{class:'check'+(on?' done':''),for:'s-'+s.id},cb,s.name,
+      h('span',{class:'s',text:(s.dose||'')+(num(s.kcal,0)?' · '+s.kcal+' 大卡':'')})));
+  });
+  if(!S.profile.supps.length)sp.append(h('span',{class:'small muted',text:'還沒有設定，按右上「新增或移除」挑選。'}));
+  renderWeek(c);
+}
+
+function renderWeek(c){
+  var w=$('#week');w.replaceChildren();
+  var days=[],i;for(i=6;i>=0;i--)days.push(shift(todayStr(),-i));
+  var vals=days.map(function(d){return totals(getDay(d))});
+  var max=Math.max.apply(null,vals.map(function(v){return v.kcal}).concat([c.target*1.25]));
+  var plot=h('div',{class:'plot'});
+  plot.append(h('div',{class:'goal',style:'bottom:'+(c.target/max*100)+'%'},h('span',{text:'目標 '+c.target})));
+  vals.forEach(function(v){
+    plot.append(h('div',{class:'bar'+(v.kcal>c.target?' over':''),style:'height:'+(v.kcal/max*100)+'%',title:Math.round(v.kcal)+' 大卡'}));
+  });
+  w.append(plot);
+  days.forEach(function(d){
+    var dt=parseYmd(d);
+    w.append(h('button',{class:'wd'+(d===S.date?' sel':''),type:'button',onclick:function(){S.date=d;renderLog()}},
+      (dt.getMonth()+1)+'/'+dt.getDate()+' 週'+WD[dt.getDay()]));
+  });
+  w.append(h('div',{class:'rowlab',text:'熱量（大卡）'}));
+  vals.forEach(function(v){w.append(h('div',{class:'wn k',text:v.kcal?String(Math.round(v.kcal)):'–'}))});
+  w.append(h('div',{class:'rowlab',text:'蛋白質（g），✓ 代表達標'}));
+  vals.forEach(function(v){w.append(h('div',{class:'wn p',text:v.p?fmt(v.p)+(v.p>=c.protein?' ✓':''):'–'}))});
+}
+
+/* ---------- 畫面：食物庫 ---------- */
+function renderStar(){
+  var b=$('#bStar'),on=isPinned('sub-combo');
+  b.textContent=on?'★':'☆';b.className='star'+(on?' on':'');
+  b.setAttribute('aria-label',on?'從常吃移除':'加到常吃');
+}
+function renderBuilder(){
+  var box=$('#bOpts');box.replaceChildren();
+  BOPTS.forEach(function(o){
+    var cb=h('input',{type:'checkbox',id:'b-'+o.id,onchange:function(e){o.on=e.target.checked;renderBuilder();renderQuick()}});
+    cb.checked=o.on;
+    box.append(h('label',{class:'check'+(o.on?' done':''),for:'b-'+o.id},cb,o.name,h('span',{class:'s',text:(o.kcal>0?'+':'')+o.kcal+' 大卡'+(o.p?' / +'+o.p+'g':'')+(o.kcal<0?'（估計）':'')})));
+  });
+  var s=subwayCalc();
+  $('#bK').textContent=fmt(s.kcal);$('#bP').textContent=fmt(s.p);
+  renderStar();
+}
+function seg(boxId,list,cur,onPick,label){
+  var box=$(boxId);box.replaceChildren();
+  list.forEach(function(x){
+    box.append(h('button',{type:'button','aria-pressed':String(x.id===cur),onclick:function(){onPick(x.id)}},label?label(x):x.name));
+  });
+}
+function renderDrink(){
+  seg('#dBase',DBASE,DS.base,function(id){DS.base=id;renderDrink()});
+  seg('#dSize',DSIZE,DS.size,function(id){DS.size=id;renderDrink()});
+  seg('#dSugar',DSUGAR,DS.sugar,function(id){DS.sugar=id;renderDrink()});
+  var box=$('#dTop');box.replaceChildren();
+  DTOP.forEach(function(t){
+    var cb=h('input',{type:'checkbox',id:'d-'+t.id,onchange:function(e){DS.tops[t.id]=e.target.checked;renderDrink()}});
+    cb.checked=!!DS.tops[t.id];
+    box.append(h('label',{class:'check'+(DS.tops[t.id]?' done':''),for:'d-'+t.id},cb,t.name,h('span',{class:'s',text:'+'+t.kcal})));
+  });
+  var d=drinkCalc();
+  $('#dK').textContent=d.kcal;$('#dP').textContent=fmt(d.p);
+}
+function renderCats(){
+  var box=$('#cats');box.replaceChildren();
+  var cats=['全部'].concat(CATS);
+  if(S.foods.some(function(f){return !f.cat||f.cat==='自訂'}))cats.push('自訂');
+  cats.forEach(function(c){
+    box.append(h('button',{class:'chip'+(S.cat===c?' on':''),type:'button',onclick:function(){S.cat=c;renderCats();renderFoodList()}},c));
+  });
+}
+function editor(f){
+  var k=h('input',{type:'number',min:'0',step:'0.1',value:String(f.kcal),inputmode:'decimal','aria-label':'熱量'});
+  var p=h('input',{type:'number',min:'0',step:'0.1',value:String(f.p),inputmode:'decimal','aria-label':'蛋白質'});
+  var box=h('div',{class:'editor',style:'grid-column:1/-1'},
+    h('span',{class:'small muted',text:'熱量'}),k,h('span',{class:'small muted',text:'蛋白質'}),p,
+    h('button',{class:'btn sm',type:'button',onclick:function(){
+      var kk=parseFloat(k.value),pp=parseFloat(p.value);
+      if(!(kk>=0)||!(pp>=0)){toast('請填數字');return}
+      S.profile.edits[f.id]={kcal:kk,p:pp};S.editing=null;saveProfile();renderFoodList();renderQuick();toast('已改成你的數字');
+    }},'儲存'),
+    f.orig?h('button',{class:'btn ghost sm',type:'button',onclick:function(){
+      delete S.profile.edits[f.id];S.editing=null;saveProfile();renderFoodList();renderQuick();toast('已還原');
+    }},'還原（'+fmt(f.orig.kcal)+' 大卡／'+fmt(f.orig.p)+'g）'):null);
+  return box;
+}
+function renderFoodList(){
+  var ul=$('#foodList');ul.replaceChildren();
+  var q=S.q.trim().toLowerCase();
+  $('#subCard').hidden=!(S.cat==='Subway'&&!q);
+  $('#drinkCard').hidden=!(S.cat==='手搖飲'&&!q);
+  $('#suppCard').hidden=!(S.cat==='保健食品'&&!q);
+  if(S.cat==='保健食品'&&!q){
+    var known={};SUPP_CAT.forEach(function(x){known[x.id]=1});
+    var extra=S.profile.supps.filter(function(x){return !known[x.id]});
+    SUPP_CAT.concat(extra).forEach(function(x){
+      var on=suppIn(x.id);
+      ul.append(h('li',null,
+        h('div',null,h('div',{class:'nm',text:x.name}),h('div',{class:'meta',text:(x.dose||'')+(x.note?' · '+x.note:'')})),
+        h('button',{class:on?'btn ghost sm':'btn sm',type:'button',onclick:function(){toggleSuppList(x)}},on?'移出清單':'加入清單')));
+    });
+    return;
+  }
+  var list=allFoods().filter(function(f){
+    if(q)return (f.name+f.cat).toLowerCase().indexOf(q)>=0;
+    if(S.cat==='常吃')return isPinned(f.id);
+    return S.cat==='全部'||f.cat===S.cat;
+  });
+  if(!list.length){
+    var msg=q?'沒有符合的食物。回「今日記錄」問 Claude 最快。':
+      S.cat==='常吃'?'按每樣食物旁的 ☆，就會出現在這裡和今日頁。':
+      S.cat==='手搖飲'?'用上面的組合器調好一杯，按「存成常喝」就會出現在這裡。':'';
+    if(msg)ul.append(h('li',{class:'empty',style:'display:block'},msg));
+  }
+  list.forEach(function(f){
+    var pin=isPinned(f.id),n=f.defQty||1;
+    ul.append(h('li',{class:'frow'},
+      h('div',null,
+        h('div',{class:'nm'},h('span',{class:'badge '+(f.custom&&f.src==='ai'?'ai':f.src),text:f.custom?(f.src==='ai'?'Claude':'自訂'):SRC[f.src]}),f.name),
+        h('div',{class:'meta'},
+          h('span',{class:'num v-k',style:'font-size:16px'},fmt(f.kcal)),' 大卡 · ',
+          h('span',{class:'num v-p',style:'font-size:16px'},fmt(f.p)),' g · 每'+f.unit+(f.note?' · '+f.note:''))),
+      h('div',{class:'ctrl'},
+        f.custom?null:h('button',{class:'star',type:'button','aria-label':'修改 '+f.name+' 的數字',onclick:function(){S.editing=S.editing===f.id?null:f.id;renderFoodList()}},'✎'),
+        h('button',{class:'star'+(pin?' on':''),type:'button','aria-label':pin?'從常吃移除':'加到常吃',onclick:function(){togglePin(f.id)}},pin?'★':'☆'),
+        f.custom?h('button',{class:'x',type:'button','aria-label':'刪除 '+f.name,onclick:function(){removeFood(f.id);renderCats();renderFoodList();renderQuick()}},'×'):null,
+        h('button',{class:'plus',type:'button','aria-label':'加入 '+f.name+(n!==1?' '+n+' 份':''),onclick:function(){addEntry(f,n)}},n!==1?'+'+n:'+')),
+      S.editing===f.id?editor(f):null));
+  });
+}
+
+/* ---------- 畫面：目標 ---------- */
+function renderGoal(){
+  var c=calc(),p=S.profile;
+  var r=$('#results');r.replaceChildren();
+  function res(l,n,u,d){return h('div',{class:'res'},h('div',{class:'l',text:l}),h('div',{class:'n num'},String(n),h('small',{text:' '+u})),h('div',{class:'d',text:d||''}))}
+  r.append(
+    res('基礎代謝',c.bmr,'大卡',c.manual?'手動輸入':'公式估算'),
+    res('每日消耗',c.tdee,'大卡','基礎代謝 × '+c.af),
+    res('目標熱量',c.target,'大卡','少吃 '+p.deficit+'，約 '+Math.round(c.pct*100)+'%'),
+    res('蛋白質',c.protein,'g','每公斤 '+p.ppk+'g'),
+    res('脂肪（下限）',c.fat,'g','每公斤 0.8g'),
+    res('碳水（剩下的）',c.carbs,'g',c.carbs<100?'偏低，訓練日可能沒力':'約略值'));
+  var w=$('#warns');w.replaceChildren();
+  if(c.pct>0.3)w.append(h('div',{class:'warn',text:'赤字超過每日消耗的 30%，屬於激進減脂。建議只撐 2–4 週，之後回到較小的赤字休息一段。'}));
+  else if(c.pct>0.22)w.append(h('div',{class:'warn',text:'赤字偏大：體重掉得快，但訓練重量容易退步。'}));
+  if(c.target<c.bmr)w.append(h('div',{class:'warn',text:'目標熱量低於基礎代謝。'}));
+  if(c.target<1500&&p.sex==='m')w.append(h('div',{class:'warn',text:'男性每天低於 1,500 大卡，很難同時練得動又吃夠營養。'}));
+  $('#gDefV').textContent=p.deficit;$('#gWk').textContent=c.wk.toFixed(2);$('#gProV').textContent=p.ppk;
+  seg('#defPresets',DEF_PRESETS.map(function(v){return {id:v,name:'-'+v}}),p.deficit,function(v){p.deficit=v;$('#gDef').value=v;saveProfile();renderGoal();renderLog()});
+  seg('#gDays',[0,1,2,3,4,5,6,7].map(function(d){return {id:d,name:d+' 天'}}),p.days,function(d){p.days=d;saveProfile();renderGoal();renderLog()});
+  seg('#gJob',JOBS,p.job,function(id){p.job=id;saveProfile();renderGoal();renderLog()});
+  seg('#gInt',INTS,p.intensity,function(id){p.intensity=id;saveProfile();renderGoal();renderLog()});
+  var j=JOBS.filter(function(x){return x.id===p.job})[0]||JOBS[1];
+  $('#actNote').textContent='活動係數 '+c.af+' ＝ 白天 '+j.f+' ＋ 每週 '+p.days+' 天訓練。有戴手錶的話，可以跟手錶的每日消耗對照，差太多再調。';
+}
+function fillGoalInputs(){
+  var p=S.profile;
+  var vals={gSex:p.sex,gAge:p.age,gH:p.height,gW:p.weight,gBmr:p.bmr||'',gDef:p.deficit,gPro:p.ppk};
+  Object.keys(vals).forEach(function(id){var e=$('#'+id);if(document.activeElement!==e)e.value=vals[id]});
+}
+function readGoal(){
+  var p=S.profile;
+  p.sex=$('#gSex').value;
+  p.age=parseFloat($('#gAge').value)||p.age;
+  p.height=parseFloat($('#gH').value)||p.height;
+  p.weight=parseFloat($('#gW').value)||p.weight;
+  var b=parseFloat($('#gBmr').value);p.bmr=b>0?b:null;
+  p.deficit=parseInt($('#gDef').value,10);
+  p.ppk=parseFloat($('#gPro').value);
+  saveProfile();renderGoal();renderLog();
+}
+
+/* ---------- 問 Claude ---------- */
+var aiCtl=null,aiItems=[],aiPhoto=null;
+function presetText(){
+  return allFoods().map(function(f){return f.name+'｜'+f.unit+'｜'+fmt(f.kcal)+'大卡｜'+fmt(f.p)+'g'}).join('\n');
+}
+function aiPrompt(text,hasImg){
+  return [
+    '你是台灣的營養計算助手。使用者描述他吃了或打算吃的東西'+(hasImg?'，並附了一張照片（可能是食物或營養標示）':'')+'。',
+    '你沒有上網，不能查官網，所以最重要的是「誠實標示不確定」，不要把猜測講成事實。',
+    '請拆成一項一項，估每項「一份」的熱量（大卡）和蛋白質（g），以及吃了幾份。',
+    '規則：',
+    '1. 名稱和下面「已知食物」相符時，直接用已知的數字，confidence 填 "known"。連鎖店品項若不在已知清單，confidence 最高只能填 "medium"，note 要寫「請對照官方營養標示」。',
+    '2. 照片若有營養標示，照標示算，注意「每份」和「每包」的差別，confidence 填 "label"。',
+    '3. 同一品項有不同部位、尺寸或口味會差很多（例如麥脆雞的棒腿／大腿、薯條大小、雞排和雞腿排、飲料杯型與甜度），必須各列一項，用 group 欄位標同一組名稱；最常見的那項 default 填 true，其他填 false。使用者已經講明的，只列那一項。',
+    '4. 每項都要給 kcal_min、kcal_max（合理範圍），範圍要誠實：外食、炸物、手搖飲、便當通常要給 ±20% 以上；有營養標示才可以給很窄的範圍。',
+    '5. 手搖飲預設大杯 700ml、便當一個、雞排一片；這些預設要寫進 note。',
+    '6. confidence：label=照標示、known=已知食物、high=很多來源都一致的公開數字、medium=一般估計、low=很不確定。拿不準就填 low，不要硬給 high。',
+    '7. note 用一句繁體中文寫你的假設（份量、部位、甜度、做法），不超過 30 字。',
+    '只回覆 JSON，格式：{"items":[{"name":"麥脆雞腿 原味 棒腿","group":"麥脆雞腿","default":true,"unit":"1塊","qty":1,"kcal":275,"kcal_min":250,"kcal_max":300,"protein":18,"confidence":"medium","note":"門市決定棒腿或大腿，請對照官方"}]}',
+    '如果完全看不出是什麼食物，回 {"items":[]}。',
+    '',
+    '已知食物（名稱｜份量｜熱量｜蛋白質）：',
+    presetText(),
+    '',
+    '使用者輸入：',
+    text||'（只有照片）'
+  ].join('\n');
+}
+var CONF={label:'照標示',known:'已知',high:'較準',medium:'估計',low:'不太確定'};
+function setAiBusy(b){
+  $('#aiGo').disabled=b;$('#aiStop').hidden=!b;
+}
+async function runAi(){
+  if(!S.sample)return;
+  var text=$('#aiText').value.trim();
+  if(!text&&!aiPhoto){toast('先寫下吃了什麼，或附一張照片');return}
+  aiCtl=new AbortController();
+  setAiBusy(true);$('#aiOut').hidden=true;
+  $('#aiStatus').textContent='Claude 查詢中…（通常 5–30 秒）';
+  try{
+    var opts={signal:aiCtl.signal};
+    if(aiPhoto&&S.canImg)opts.images=[aiPhoto];
+    var res=await S.sample.json(aiPrompt(text,!!opts.images),opts);
+    var items=(res&&Array.isArray(res.items))?res.items:[];
+    aiItems=items.map(function(x){return {
+      name:String(x.name||'未命名').slice(0,60),unit:String(x.unit||'1份').slice(0,20),
+      qty:Math.max(0.1,num(x.qty,1)),kcal:Math.max(0,num(x.kcal,0)),p:Math.max(0,num(x.protein,0)),
+      conf:CONF[x.confidence]?x.confidence:'medium',note:String(x.note||'').slice(0,60),
+      group:x.group?String(x.group).slice(0,30):'',
+      kmin:num(x.kcal_min,null),kmax:num(x.kcal_max,null),
+      pick:x['default']!==false}});
+    if(!aiItems.length){$('#aiStatus').textContent='看不出是什麼食物，換個說法再試試。';return}
+    $('#aiStatus').textContent='';
+    renderAi();
+  }catch(e){
+    var code=e&&e.code;
+    if(code==='cancelled'){$('#aiStatus').textContent=''}
+    else if(code==='not_granted'||code==='sampling_disabled'||code==='not_declared'||code==='capability_disabled'){
+      $('#aiStatus').textContent='這個檢視無法使用 Claude 查詢，可以改用下方手動新增。';$('#aiGo').disabled=true;
+    }
+    else if(code==='rate_limited')$('#aiStatus').textContent='查太多次了，等一下再試。';
+    else if(code==='image_rejected')$('#aiStatus').textContent='這張照片讀不了，換一張試試。';
+    else if(code==='invalid_json')$('#aiStatus').textContent='回覆格式怪怪的，再按一次試試。';
+    else $('#aiStatus').textContent='連線出了問題，再按一次試試。';
+  }finally{setAiBusy(false);aiCtl=null}
+}
+function renderAi(){
+  var ul=$('#aiList');ul.replaceChildren();
+  aiItems.forEach(function(it,idx){
+    var cb=h('input',{type:'checkbox','aria-label':'選取 '+it.name,onchange:function(e){it.pick=e.target.checked;sumAi()}});cb.checked=it.pick;
+    var q=h('input',{type:'number',class:'qin',min:'0.1',step:'0.5',value:String(it.qty),inputmode:'decimal','aria-label':it.name+' 份數',oninput:function(e){it.qty=Math.max(0,num(e.target.value,0));sumAi();line()}});
+    var tot=h('div',{class:'vals'});
+    function line(){tot.replaceChildren(
+      h('span',{class:'num v-k'},String(Math.round(it.kcal*it.qty)),h('span',{class:'v-u',text:'大卡'})),
+      h('span',{class:'num v-p'},fmt(it.p*it.qty),h('span',{class:'v-u',text:'g'})))}
+    line();
+    ul.append(h('li',null,cb,
+      h('div',null,
+        h('div',{class:'nm'},h('span',{class:'badge '+(it.conf==='label'||it.conf==='known'?'label':it.conf==='low'?'est':'ai'),text:CONF[it.conf]}),it.name),
+        h('div',{class:'meta',text:'每'+it.unit+' '+fmt(it.kcal)+' 大卡'+(it.kmin!=null&&it.kmax!=null&&it.kmax>it.kmin?'（約 '+Math.round(it.kmin)+'–'+Math.round(it.kmax)+'）':'')+' · '+fmt(it.p)+'g'+(it.group&&!it.pick?' · 其他選項，要吃再勾':'')+(it.note?' · '+it.note:'')}),
+        h('div',{class:'ctrl',style:'margin-top:4px'},h('span',{class:'small muted',text:'份數'}),q)),
+      tot));
+  });
+  $('#aiOut').hidden=false;sumAi();
+}
+function sumAi(){
+  var k=0,p=0,n=0;aiItems.forEach(function(i){if(i.pick&&i.qty>0){k+=i.kcal*i.qty;p+=i.p*i.qty;n++}});
+  $('#aiAdd').textContent=n?'加入這一天（'+Math.round(k)+' 大卡 · '+fmt(p)+'g）':'把勾選的加入這一天';
+  $('#aiAdd').disabled=!n;$('#aiSave').disabled=!n;
+}
+$('#aiAdd').addEventListener('click',function(){
+  var n=0;
+  aiItems.forEach(function(i){if(i.pick&&i.qty>0){addEntry({name:i.name,unit:i.unit,kcal:i.kcal,p:i.p},i.qty,true);n++}});
+  if(n){toast('已加入 '+n+' 項');$('#aiOut').hidden=true;$('#aiText').value='';clearPhoto();aiItems=[]}
+});
+$('#aiSave').addEventListener('click',function(){
+  var n=0;
+  aiItems.forEach(function(i){if(i.pick){
+    var exists=S.foods.some(function(f){return f.name===i.name&&f.unit===i.unit});
+    if(exists)return;
+    var f={id:newId('c'),name:i.name,unit:i.unit,kcal:i.kcal,p:i.p,src:'ai',note:i.note};
+    S.foods.push(f);saveFood(f);n++;
+  }});
+  renderCats();renderFoodList();
+  toast(n?'已存 '+n+' 項到食物庫（分類：自訂）':'這些已經在食物庫裡了');
+});
+$('#aiForm').addEventListener('submit',function(e){e.preventDefault();runAi()});
+$('#aiStop').addEventListener('click',function(){if(aiCtl)aiCtl.abort()});
+function clearPhoto(){aiPhoto=null;$('#aiPhoto').value='';$('#photoName').textContent=''}
+$('#aiPhoto').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0];
+  aiPhoto=f||null;$('#photoName').textContent=f?'已附：'+f.name:'';
+});
+
+/* ---------- 分頁 ---------- */
+var TABS=['log','foods','goal'];
+function go(t){if(location.hash!=='#'+t)location.hash=t;else showTab(t)}
+function showTab(t){
+  if(TABS.indexOf(t)<0)t='log';
+  S.tab=t;
+  TABS.forEach(function(x){
+    $('#view-'+x).hidden=x!==t;
+    $('#t-'+x).setAttribute('aria-selected',x===t?'true':'false');
+  });
+  window.scrollTo(0,0);
+}
+window.addEventListener('hashchange',function(){showTab(location.hash.slice(1))});
+
+/* ---------- 事件 ---------- */
+TABS.forEach(function(t){$('#t-'+t).addEventListener('click',function(){go(t)})});
+$('#prevDay').addEventListener('click',function(){S.date=shift(S.date,-1);renderLog()});
+$('#nextDay').addEventListener('click',function(){if(S.date<todayStr()){S.date=shift(S.date,1);renderLog()}});
+$('#bAdd').addEventListener('click',function(){addEntry(subwayCalc(),1)});
+$('#bStar').addEventListener('click',function(){togglePin('sub-combo')});
+$('#dAdd').addEventListener('click',function(){addEntry(drinkCalc(),1)});
+$('#dSaveBtn').addEventListener('click',function(){
+  var d=drinkCalc();
+  if(S.foods.some(function(f){return f.name===d.name})){toast('已經存過這杯了');return}
+  var f={id:newId('c'),cat:'手搖飲',name:d.name,unit:'1杯',kcal:d.kcal,p:d.p,src:'est',note:'手搖飲組合器'};
+  S.foods.push(f);saveFood(f);S.profile.pins.push(f.id);saveProfile();
+  renderCats();renderFoodList();renderQuick();toast('已存成常喝，今日頁可以一鍵加入');
+});
+$('#q').addEventListener('input',function(e){S.q=e.target.value;renderFoodList()});
+['gSex','gAge','gH','gW','gBmr','gDef','gPro'].forEach(function(id){
+  var e=$('#'+id);e.addEventListener(e.tagName==='SELECT'?'change':'input',readGoal);
+});
+$('#suppCard').addEventListener('submit',function(e){
+  e.preventDefault();
+  var n=$('#suppName').value.trim();if(!n)return;
+  S.profile.supps.push({id:newId('s'),name:n,dose:$('#suppDose').value.trim(),kcal:0,p:0});
+  $('#suppName').value='';$('#suppDose').value='';
+  saveProfile();renderLog();renderFoodList();toast('已加入清單');
+});
+function readCustom(){
+  var n=$('#cName').value.trim(),k=parseFloat($('#cK').value),p=parseFloat($('#cP').value);
+  if(!n||!(k>=0)||!(p>=0)){toast('請填名稱、熱量和蛋白質');return null}
+  return {name:n,unit:$('#cUnit').value.trim()||'1份',kcal:k,p:p};
+}
+$('#customForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  var f=readCustom();if(!f)return;
+  f.id=newId('c');f.src='est';
+  S.foods.push(f);saveFood(f);
+  renderCats();renderFoodList();
+  $('#cName').value='';$('#cK').value='';$('#cP').value='';
+  toast('已存進食物庫');
+});
+$('#suppManage').addEventListener('click',function(){S.cat='保健食品';S.q='';$('#q').value='';renderCats();renderFoodList();go('foods')});
+$('#cOnce').addEventListener('click',function(){var f=readCustom();if(f)addEntry(f,1)});
+
+/* ---------- 啟動 ---------- */
+function renderAll(){renderQuick();renderLog();renderBuilder();renderDrink();renderCats();renderFoodList();fillGoalInputs();renderGoal()}
+function loadLocal(){
+  S.profile=migrate(LS.get('dc:profile'));
+  S.foods=LS.get('dc:foods')||[];
+  try{
+    for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);
+      if(k&&k.indexOf('dc:day:')===0){var v=LS.get(k);if(v)S.days[k.slice(7)]=v}}
+  }catch(e){}
+}
+showTab(location.hash.slice(1));
+renderAll();
+
+(async function initAi(){
+  var s=null;
+  try{s=window.claude&&window.claude.use?await window.claude.use('sample'):null}catch(e){s=null}
+  if(!s)return;
+  S.sample=s;
+  try{var lim=await s.limits();S.canImg=!!(lim&&lim.images)}catch(e){S.canImg=false}
+  $('#photoBtn').hidden=!S.canImg;
+  $('#aiForm').hidden=false;
+})();
+
+(async function init(){
+  var db=null;
+  try{db=window.claude&&window.claude.use?await window.claude.use('db'):null}catch(e){db=null}
+  if(!db){loadLocal();setSync('local');renderAll();return}
+  S.db=db;setSync('wait');
+  var slow=setTimeout(function(){setSync('slow')},10000);
+  var firstDone=false;
+  function confirmed(snap){
+    if(!snap.metadata.fromCache&&!firstDone){firstDone=true;clearTimeout(slow);if(!busy.size)setSync('cloud')}
+  }
+  function fail(){clearTimeout(slow);setSync('error')}
+  try{
+    db.doc('profile/me').onSnapshot(function(snap){
+      confirmed(snap);
+      if(snap.metadata.hasPendingWrites)return;
+      if(snap.exists){
+        var raw=snap.data(),m=migrate(clone(raw));
+        S.profile=m;fillGoalInputs();renderGoal();renderLog();renderQuick();renderFoodList();renderStar();
+        if(!(raw.suppV>=3))saveProfile();
+      }
+    },fail);
+    db.collection('foods').onSnapshot(function(snap){
+      confirmed(snap);
+      S.foods=snap.docs.map(function(d){var x=clone(d.data());x.id=d.id;return x});
+      renderCats();renderFoodList();renderQuick();
+    },fail);
+    db.collection('days').orderBy('date','desc').limit(60).onSnapshot(function(snap){
+      confirmed(snap);
+      if(snap.metadata.hasPendingWrites)return;
+      snap.docs.forEach(function(d){S.days[d.id]=clone(d.data())});
+      renderLog();
+    },fail);
+  }catch(e){fail()}
+})();
+})();
+</script>
+
+</body></html>
